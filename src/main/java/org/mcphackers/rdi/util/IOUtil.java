@@ -5,23 +5,21 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.jar.JarOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import org.mcphackers.rdi.injector.Injector;
-import org.mcphackers.rdi.injector.RDInjector;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
-public class FileUtil {
-    public static void write(RDInjector wrapper, OutputStream out) throws IOException {
+public class IOUtil {
+    public static void write(Injector injector, OutputStream out) throws IOException {
         JarOutputStream jarOut = new JarOutputStream(out);
-        for (Map.Entry<String, ClassNode> classNodeEntry : wrapper.getIndexedNodes().entrySet()) {
+        for (ClassNode classNode : injector.getClasses()) {
             ClassWriter writer = new ClassWriter(0);
-            classNodeEntry.getValue().accept(writer);
-            jarOut.putNextEntry(new ZipEntry(classNodeEntry.getValue().name + ".class"));
+            classNode.accept(writer);
+            jarOut.putNextEntry(new ZipEntry(classNode.name + ".class"));
             jarOut.write(writer.toByteArray());
             jarOut.closeEntry();
         }
@@ -32,7 +30,7 @@ public class FileUtil {
      * Write all class nodes and copy over all resources from a given jar.
      * This method throws an IOException if there is no file at the path "resources"
      * or if it is not a zip (and by extension jar) file.
-     * If no resources need to be copied over, {@link FileUtil#write(OutputStream)} should be used instead.
+     * If no resources need to be copied over, {@link IOUtil#write(Injector, OutputStream)} should be used instead.
      *
      * @param out The stream to write the nodes and resources to as a jar
      * @param resources The path to obtain resources from

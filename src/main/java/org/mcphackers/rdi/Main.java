@@ -10,7 +10,7 @@ import java.time.temporal.ChronoUnit;
 
 import org.mcphackers.rdi.injector.Injector;
 import org.mcphackers.rdi.injector.RDInjector;
-import org.mcphackers.rdi.util.FileUtil;
+import org.mcphackers.rdi.util.IOUtil;
 
 public class Main {
     public static final String VERSION = "v1.0";
@@ -55,7 +55,7 @@ public class Main {
 
         // Export classes
         try {
-            FileUtil.write(injector, Files.newOutputStream(outputJarFile), inputJarFile);
+            IOUtil.write(injector, Files.newOutputStream(outputJarFile), inputJarFile);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
