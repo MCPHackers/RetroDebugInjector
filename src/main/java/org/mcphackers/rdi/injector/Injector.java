@@ -8,6 +8,8 @@ public interface Injector {
 	
 	void setClasses(List<ClassNode> nodes);
 
+	void addClass(ClassNode node);
+
 	List<ClassNode> getClasses();
 	
 	ClassNode getClass(String className);

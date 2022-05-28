@@ -26,12 +26,16 @@ public class ClassInitAdder extends ClassVisitor {
 	@Override
 	public void visit(ClassNode node) {
 		this.superName = node.superName;
+		//Visit everything else first to fill `constructors` list
 		super.visit(node);
 
+		if(!constructors.isEmpty()) { // No implicit constructor needed
+			return;
+		}
 		ClassNode superClass = injector.getClass(superName);
 		for(MethodNode method : superClass.methods) {
 			// Adding implicit constructor
-			if(constructors.isEmpty() && "<init>".equals(method.name)) {
+			if("<init>".equals(method.name)) {
 				MethodNode mn = new MethodNode(ACC_PRIVATE, "<init>", method.desc, null, null);
 				mn.visitVarInsn(ALOAD, 0);
 				for(int i = 0; i < Type.getArgumentTypes(method.desc).length; i++) {

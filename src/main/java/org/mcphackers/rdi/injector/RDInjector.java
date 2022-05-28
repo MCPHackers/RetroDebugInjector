@@ -15,6 +15,7 @@ import java.util.zip.ZipInputStream;
 
 import org.mcphackers.rdi.injector.visitors.AccessFixer;
 import org.mcphackers.rdi.injector.visitors.AddExceptions;
+import org.mcphackers.rdi.injector.visitors.ClassInitAdder;
 import org.mcphackers.rdi.injector.visitors.ClassVisitor;
 import org.mcphackers.rdi.injector.visitors.FixParameterLVT;
 import org.objectweb.asm.ClassReader;
@@ -28,6 +29,9 @@ public class RDInjector implements Injector {
 	
 	public RDInjector(Path path) {
 		indexJar(path, this);
+	}
+	public RDInjector(List<ClassNode> nodes) {
+		setClasses(nodes);
 	}
 
     private final Map<String, ClassNode> indexedNodes = new HashMap<>();
@@ -50,6 +54,10 @@ public class RDInjector implements Injector {
     		indexedNodes.put(node.name, node);
     	}
     	setIndexedNodes(indexedNodes);
+    }
+
+    public void addClass(ClassNode node) {
+		indexedNodes.put(node.name, node);
     }
     
     public ClassNode getClass(String className) {
@@ -78,6 +86,11 @@ public class RDInjector implements Injector {
     
     public RDInjector fixParameterLVT() {
     	visitorStack = new FixParameterLVT(visitorStack);
+		return this;
+    }
+    
+    public RDInjector fixImplicitConstructors() {
+    	visitorStack = new ClassInitAdder(this, visitorStack);
 		return this;
     }
     
