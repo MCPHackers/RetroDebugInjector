@@ -1,8 +1,4 @@
-package me.zero.rdi.util;
-
-import me.zero.rdi.wrapper.RDIClassWrapper;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.tree.ClassNode;
+package org.mcphackers.rdi.util;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,10 +10,15 @@ import java.util.jar.JarOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.mcphackers.rdi.injector.Injector;
+import org.mcphackers.rdi.injector.RDInjector;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.ClassNode;
+
 public class FileUtil {
-    public static void write(OutputStream out) throws IOException {
+    public static void write(RDInjector wrapper, OutputStream out) throws IOException {
         JarOutputStream jarOut = new JarOutputStream(out);
-        for (Map.Entry<String, ClassNode> classNodeEntry : RDIClassWrapper.getIndexedNodes().entrySet()) {
+        for (Map.Entry<String, ClassNode> classNodeEntry : wrapper.getIndexedNodes().entrySet()) {
             ClassWriter writer = new ClassWriter(0);
             classNodeEntry.getValue().accept(writer);
             jarOut.putNextEntry(new ZipEntry(classNodeEntry.getValue().name + ".class"));
@@ -37,15 +38,15 @@ public class FileUtil {
      * @param resources The path to obtain resources from
      * @throws IOException If something went wrong while writing to the stream or reading the resources jar.
      */
-    public static void write(OutputStream out, Path resources) throws IOException {
+    public static void write(Injector injector, OutputStream out, Path resources) throws IOException {
         if (Files.notExists(resources)) {
             throw new IOException("The path (" + resources.toString() + ") specified by \"resources\" does not exist.");
         }
         JarOutputStream jarOut = new JarOutputStream(out);
-        for (Map.Entry<String, ClassNode> classNodeEntry : RDIClassWrapper.getIndexedNodes().entrySet()) {
+        for (ClassNode classNode : injector.getClasses()) {
             ClassWriter writer = new ClassWriter(0);
-            classNodeEntry.getValue().accept(writer);
-            jarOut.putNextEntry(new ZipEntry(classNodeEntry.getValue().name + ".class"));
+            classNode.accept(writer);
+            jarOut.putNextEntry(new ZipEntry(classNode.name + ".class"));
             jarOut.write(writer.toByteArray());
             jarOut.closeEntry();
         }

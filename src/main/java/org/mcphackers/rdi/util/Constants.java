@@ -1,4 +1,4 @@
-package me.zero.rdi.util;
+package org.mcphackers.rdi.util;
 
 import org.objectweb.asm.Opcodes;
 

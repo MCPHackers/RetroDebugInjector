@@ -1,26 +1,23 @@
-package me.zero.rdi.wrapper;
+package org.mcphackers.rdi.injector.visitors;
 
-import me.zero.rdi.util.DescString;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+
+import org.mcphackers.rdi.util.DescString;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.LocalVariableNode;
+import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.ParameterNode;
 
-import java.util.*;
-
-public class RDIMethodWrapper {
-    protected RDIClassWrapper classWrapper;
-
-    public RDIMethodWrapper (ClassNode classNode) {
-        this.classWrapper = new RDIClassWrapper(classNode);
-    }
-
-    public RDIMethodWrapper(RDIClassWrapper classWrapper) {
-        this.classWrapper = classWrapper;
-    }
-
-    // Transformation methods
-    public List<MethodNode> getMethods() {
-        return this.classWrapper.classNode.methods;
-    }
+public class FixParameterLVT extends ClassVisitor {
+	
+	public FixParameterLVT(ClassVisitor cv) {
+		super(cv);
+	}
 
     /**
      * Method that tries to put the Local Variable Table (LVT) in a acceptable state
@@ -31,7 +28,7 @@ public class RDIMethodWrapper {
      * but might not be useful for less naive decompilers such as procyon, which do not decompile
      * into incoherent java code if the LVT is damaged.
      */
-    public void fixParameterLVT(MethodNode method) {
+    public void visitMethod(MethodNode method) {
         List<LocalVariableNode> locals = method.localVariables;
         List<ParameterNode> params = method.parameters;
         if (method.desc.indexOf(')') == 1 && params == null) {
@@ -165,5 +162,7 @@ public class RDIMethodWrapper {
             }
             locals.add(a);
         }
+        super.visitMethod(method);
     }
+
 }

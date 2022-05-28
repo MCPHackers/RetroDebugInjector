@@ -1,13 +1,4 @@
-package me.zero.rdi;
-
-import me.zero.rdi.util.FileUtil;
-import me.zero.rdi.wrapper.RDIClassWrapper;
-import me.zero.rdi.wrapper.RDIFieldWrapper;
-import me.zero.rdi.wrapper.RDIMethodWrapper;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.InnerClassNode;
-import org.objectweb.asm.tree.MethodNode;
+package org.mcphackers.rdi;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,7 +7,10 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Map;
+
+import org.mcphackers.rdi.injector.Injector;
+import org.mcphackers.rdi.injector.RDInjector;
+import org.mcphackers.rdi.util.FileUtil;
 
 public class Main {
     public static final String VERSION = "v1.0";
@@ -53,28 +47,15 @@ public class Main {
         if (inputJarFile == null || outputJarFile == null) return;
 
         // Transform classes
-        RDIClassWrapper.indexJar(inputJarFile);
+        Injector injector = new RDInjector(inputJarFile)
+        		.fixInnerClasses()
+        		.fixParameterLVT();
+        
+        injector.transform();
 
-        if (!RDIClassWrapper.getIndexedNodes().isEmpty()) {
-            for (Map.Entry<String, ClassNode> entry : RDIClassWrapper.getIndexedNodes().entrySet()) {
-                ClassNode classNode = entry.getValue();
-
-                RDIClassWrapper classWrapper = new RDIClassWrapper(classNode);
-                RDIMethodWrapper methodWrapper = classWrapper.getMethodWrapper(classNode);
-                RDIFieldWrapper fieldWrapper = classWrapper.getFieldWrapper(classNode);
-
-                classWrapper.fixInnerClasses();
-                for (MethodNode methodNode : methodWrapper.getMethods()) {
-                    methodWrapper.fixParameterLVT(methodNode);
-                }
-
-                for (FieldNode fieldNode : fieldWrapper.getFields()) {
-                }
-            }
-        }
         // Export classes
         try {
-            FileUtil.write(Files.newOutputStream(outputJarFile), inputJarFile);
+            FileUtil.write(injector, Files.newOutputStream(outputJarFile), inputJarFile);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

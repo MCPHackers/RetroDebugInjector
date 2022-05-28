@@ -1,5 +1,22 @@
-package me.zero.rdi.wrapper;
+package org.mcphackers.rdi.injector;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+
+import org.mcphackers.rdi.injector.visitors.AccessFixer;
+import org.mcphackers.rdi.injector.visitors.AddExceptions;
+import org.mcphackers.rdi.injector.visitors.ClassVisitor;
+import org.mcphackers.rdi.injector.visitors.FixParameterLVT;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
@@ -7,44 +24,36 @@ import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+public class RDInjector implements Injector {
+	
+	public RDInjector(Path path) {
+		indexJar(path, this);
+	}
 
-public class RDIClassWrapper {
-    private static final Map<String, ClassNode> indexedNodes = new HashMap<>();
-    protected final ClassNode classNode;
+    private final Map<String, ClassNode> indexedNodes = new HashMap<>();
+    
+    private boolean fixInnerClasses = false;
+    private ClassVisitor visitorStack;
 
-    public RDIClassWrapper(ClassNode classNode) {
-        this.classNode = classNode;
-    }
-
-    public static Map<String, ClassNode> getIndexedNodes() {
+    public Map<String, ClassNode> getIndexedNodes() {
         return indexedNodes;
     }
 
     public void setIndexedNodes(Map<String, ClassNode> indexedNodes) {
-        RDIClassWrapper.indexedNodes.clear();
-        RDIClassWrapper.indexedNodes.putAll(indexedNodes);
+        this.indexedNodes.clear();
+        this.indexedNodes.putAll(indexedNodes);
     }
 
-    public static void indexJar(Path path) {
-        try (ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(path))) {
-            ZipEntry zipEntry;
-            while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                if (zipEntry.getName().endsWith(".class")) {
-                    ClassReader classReader = new ClassReader(zipInputStream);
-                    ClassNode classNode = new ClassNode();
-                    classReader.accept(classNode, 0);
-                    indexedNodes.put(classReader.getClassName(), classNode);
-                }
-            }
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
+    public void setClasses(List<ClassNode> nodes) {
+    	Map<String, ClassNode> indexedNodes = new HashMap<>();
+    	for(ClassNode node : nodes) {
+    		indexedNodes.put(node.name, node);
+    	}
+    	setIndexedNodes(indexedNodes);
+    }
+    
+    public ClassNode getClass(String className) {
+    	return indexedNodes.get(className);
     }
 
     public List<ClassNode> getClasses() {
@@ -55,30 +64,39 @@ public class RDIClassWrapper {
         return classes;
     }
 
-    public List<InnerClassNode> getInnerClasses() {
-        return this.classNode.innerClasses;
+	public void transform() {
+		if(fixInnerClasses) doFixInnerClasses();
+		for(ClassNode node : getClasses()) {
+			visitorStack.visit(node);
+		}
+	}
+    
+    public RDInjector fixInnerClasses() {
+    	fixInnerClasses = true;
+    	return this;
     }
-
-    public RDIMethodWrapper getMethodWrapper(String className) {
-        return this.getMethodWrapper(indexedNodes.get(className));
+    
+    public RDInjector fixParameterLVT() {
+    	visitorStack = new FixParameterLVT(visitorStack);
+		return this;
     }
-
-    public RDIMethodWrapper getMethodWrapper(ClassNode classNode) {
-        return new RDIMethodWrapper(classNode);
+    
+    public RDInjector fixExceptions(Path path) {
+    	Exceptions exceptions = new Exceptions(path);
+    	visitorStack = new AddExceptions(exceptions, visitorStack);
+		return this;
     }
-
-    public RDIFieldWrapper getFieldWrapper(String className) {
-        return this.getFieldWrapper(indexedNodes.get(className));
-    }
-
-    public RDIFieldWrapper getFieldWrapper(ClassNode classNode) {
-        return new RDIFieldWrapper(classNode);
+    
+    public RDInjector fixAccess(Path path) {
+    	Access access = new Access(path);
+    	visitorStack = new AccessFixer(access, visitorStack);
+		return this;
     }
 
     /**
      * Guesses the inner classes from class nodes
      */
-    public void fixInnerClasses() {
+    private void doFixInnerClasses() {
         Map<String, InnerClassNode> splitInner = new HashMap<>();
         Set<String> enums = new HashSet<>();
         Map<String, List<InnerClassNode>> parents = new HashMap<>();
@@ -263,6 +281,24 @@ public class RDIClassWrapper {
                     node.innerClasses.add(innerEntry);
                 }
             }
+        }
+    }
+	
+    public static void indexJar(Path path, Injector injector) {
+        try (ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(path))) {
+        	List<ClassNode> nodes = new ArrayList<>();
+        	ZipEntry zipEntry;
+            while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                if (zipEntry.getName().endsWith(".class")) {
+                    ClassReader classReader = new ClassReader(zipInputStream);
+                    ClassNode classNode = new ClassNode();
+                    classReader.accept(classNode, 0);
+                    nodes.add(classNode);
+                }
+            }
+            injector.setClasses(nodes);
+        } catch (IOException ex) {
+            ex.printStackTrace();
         }
     }
 }
