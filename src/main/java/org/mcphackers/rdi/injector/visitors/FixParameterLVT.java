@@ -29,6 +29,7 @@ public class FixParameterLVT extends ClassVisitor {
      * into incoherent java code if the LVT is damaged.
      */
     public void visitMethod(MethodNode method) {
+        super.visitMethod(method);
         List<LocalVariableNode> locals = method.localVariables;
         List<ParameterNode> params = method.parameters;
         if (method.desc.indexOf(')') == 1 && params == null) {
@@ -162,7 +163,6 @@ public class FixParameterLVT extends ClassVisitor {
             }
             locals.add(a);
         }
-        super.visitMethod(method);
     }
 
 }

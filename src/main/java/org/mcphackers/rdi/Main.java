@@ -49,6 +49,7 @@ public class Main {
         // Transform classes
         Injector injector = new RDInjector(inputJarFile)
         		.fixInnerClasses()
+				.fixImplicitConstructors()
         		.fixParameterLVT();
         
         injector.transform();

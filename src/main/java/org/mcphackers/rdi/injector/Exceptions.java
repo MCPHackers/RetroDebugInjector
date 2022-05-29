@@ -21,18 +21,15 @@ public class Exceptions {
 		this.exceptions.clear();
 		try {
 			Files.readAllLines(file).forEach(line -> {
-				line = line.trim();
-				if (line.isEmpty() || line.startsWith("#"))
-					return;
-
-				int idx = line.indexOf(' ', line.indexOf(' ') + 1);
-				if (idx == -1) {
-					return;
-				}
-
-				String key = line.substring(0, idx);
-				List<String> excs = Arrays.asList(line.substring(idx + 1).split(" "));
-				this.exceptions.put(key, excs);
+			    line = line.trim();
+			    if (line.isEmpty() || line.startsWith("#"))
+			        return;
+			    boolean oldFormat = line.contains(".");
+			    int idx = oldFormat ? line.lastIndexOf('=') : line.indexOf(' ', line.indexOf(' ') + 1);
+			    if (idx == -1) return;
+			    String key = oldFormat ? line.substring(0, idx).replace('.', '/').replace("(", " (") : line.substring(0, idx);
+			    List<String> excs = Arrays.asList(line.substring(idx + 1).split(oldFormat ? "," : " "));
+			    this.exceptions.put(key, excs);
 			});
 		} catch (IOException e) {
 			e.printStackTrace();

@@ -1,5 +1,7 @@
 package org.mcphackers.rdi.injector.visitors;
 
+import java.util.List;
+
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InnerClassNode;
@@ -16,10 +18,14 @@ public abstract class ClassVisitor {
 		cv = classVisitor;
 	}
 	
-	public void visit(ClassNode node) {
-		if (cv != null) {
-	      cv.visit(node);
-	    }
+	public final void visit(List<ClassNode> nodes) {
+		for(ClassNode node : nodes) {
+			visit(node);
+		}
+	}
+	
+	public final void visit(ClassNode node) {
+		visitClass(node);
 		for(InnerClassNode inner : node.innerClasses) {
 			visitInner(inner);
 		}
@@ -29,7 +35,13 @@ public abstract class ClassVisitor {
 		for(FieldNode field : node.fields) {
 			visitField(field);
 		}
-			
+		visitEnd(node);
+	}
+	
+	protected void visitClass(ClassNode node) {
+		if (cv != null) {
+	      cv.visitClass(node);
+	    }
 	}
 
 	protected void visitInner(InnerClassNode node) {
@@ -47,6 +59,12 @@ public abstract class ClassVisitor {
 	protected void visitField(FieldNode node) {
 		if (cv != null) {
 	      cv.visitField(node);
+	    }
+	}
+	
+	protected void visitEnd(ClassNode node) {
+		if (cv != null) {
+	      cv.visitEnd(node);
 	    }
 	}
 }
