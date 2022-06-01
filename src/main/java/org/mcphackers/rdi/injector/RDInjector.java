@@ -3,46 +3,26 @@ package org.mcphackers.rdi.injector;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.mcphackers.rdi.injector.transform.AddGenerics;
+import org.mcphackers.rdi.injector.transform.Injection;
+import org.mcphackers.rdi.injector.transform.Transform;
 import org.mcphackers.rdi.injector.visitors.AccessFixer;
 import org.mcphackers.rdi.injector.visitors.AddExceptions;
 import org.mcphackers.rdi.injector.visitors.ClassInitAdder;
 import org.mcphackers.rdi.injector.visitors.ClassVisitor;
 import org.mcphackers.rdi.injector.visitors.FixBridges;
 import org.mcphackers.rdi.injector.visitors.FixParameterLVT;
-import org.mcphackers.rdi.util.Constants;
-import org.mcphackers.rdi.util.DescString;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.FrameNode;
-import org.objectweb.asm.tree.InnerClassNode;
-import org.objectweb.asm.tree.LabelNode;
-import org.objectweb.asm.tree.MethodInsnNode;
-import org.objectweb.asm.tree.MethodNode;
 
 public class RDInjector implements Injector {
-	
-	public static enum Injection {
-	    fixInnerClasses,
-	    fixSwitchMaps,
-	    guessAnonymousInnerClasses;
-	}
-
     
 	public RDInjector(Path path) {
 		indexJar(path, this);
@@ -52,9 +32,9 @@ public class RDInjector implements Injector {
 	}
 
     private final Map<String, ClassNode> indexedNodes = new HashMap<>();
-    
+
+    private List<Injection> globalTransform = new ArrayList<>();
     private ClassVisitor visitorStack;
-    private final List<Injection> globalTransform = new ArrayList<>();
 
     public Map<String, ClassNode> getIndexedNodes() {
         return indexedNodes;
@@ -91,34 +71,30 @@ public class RDInjector implements Injector {
 
 	public void transform() {
 		for(Injection transform : globalTransform) {
-			switch(transform) {
-			case fixInnerClasses:
-				doFixInnerClasses();
-				break;
-			case fixSwitchMaps:
-				doFixSwitchMaps();
-				break;
-			case guessAnonymousInnerClasses:
-				doGuessAnonymousInnerClasses();
-				break;
-			}
+			transform.transform();
 		}
 		visitorStack.visit(getClasses());
 	}
     
     public RDInjector fixInnerClasses() {
-    	globalTransform.add(Injection.fixInnerClasses);
+    	globalTransform.add(() -> Transform.fixInnerClasses(this));
     	return this;
     }
     
     public RDInjector fixSwitchMaps() {
-    	globalTransform.add(Injection.fixSwitchMaps);
+    	globalTransform.add(() -> Transform.fixSwitchMaps(this));
     	return this;
     }
     
     public RDInjector guessAnonymousInnerClasses() {
-    	globalTransform.add(Injection.guessAnonymousInnerClasses);
+    	globalTransform.add(() -> Transform.guessAnonymousInnerClasses(this));
     	return this;
+    }
+    
+    public RDInjector addGenerics(Path path) {
+    	Generics generics = new Generics(path);
+    	globalTransform.add(new AddGenerics(this, generics));
+		return this;
     }
     
     public RDInjector fixParameterLVT() {
@@ -146,498 +122,6 @@ public class RDInjector implements Injector {
     	Access access = new Access(path);
     	visitorStack = new AccessFixer(access, visitorStack);
 		return this;
-    }
-
-    /**
-     * Guesses the inner classes from class nodes
-     */
-    private void doFixInnerClasses() {
-        Map<String, InnerClassNode> splitInner = new HashMap<>();
-        Set<String> enums = new HashSet<>();
-        Map<String, List<InnerClassNode>> parents = new HashMap<>();
-
-        // Initial indexing sweep
-        for (ClassNode node : this.getClasses()) {
-            parents.put(node.name, new ArrayList<>());
-            if (node.superName.equals("java/lang/Enum")) {
-                enums.add(node.name); // Register enum
-            }
-        }
-        // Second sweep
-        for (ClassNode node : this.getClasses()) {
-            // Sweep enum members
-            if (enums.contains(node.superName)) {
-                // Child of (abstract) enum
-                boolean skip = false;
-                for (InnerClassNode innerNode : node.innerClasses) {
-                    if (node.name.equals(innerNode.name)) {
-                        skip = true;
-                        break;
-                    }
-                }
-                if (!skip) {
-                    // Apply fixup
-                    // We are using 16400 for access, but are there times where this is not wanted?
-                    // 16400 = ACC_FINAL | ACC_ENUM
-                    InnerClassNode innerNode = new InnerClassNode(node.name, null, null, 16400);
-                    parents.get(node.superName).add(innerNode);
-                    node.outerClass = node.superName;
-                    node.innerClasses.add(innerNode);
-                }
-            } else if (node.name.contains("$")) {
-                // Partially unobfuscated inner class.
-
-                // This operation cannot be performed during the first sweep
-                boolean skip = false;
-                for (InnerClassNode innernode : node.innerClasses) {
-                    if (innernode.name.equals(node.name)) {
-                        skip = true;
-                        break;
-                    }
-                }
-                if (!skip) {
-                    int lastSeperator = node.name.lastIndexOf('$');
-                    String outerNode = node.name.substring(0, lastSeperator++);
-                    String innerMost = node.name.substring(lastSeperator);
-                    InnerClassNode innerClassNode;
-                    if (innerMost.matches("^\\d+$")) {
-                        // Anonymous class
-                        // We know that ACC_SUPER is invalid for inner classes, so we remove that flag
-                        innerClassNode = new InnerClassNode(node.name, null, null, node.access & ~Opcodes.ACC_SUPER);
-                        node.outerClass = outerNode;
-                    } else {
-                        // We need to check for static inner classes.
-                        // We already know that anonymous classes can never be static classes by definition,
-                        // So we can skip that step for anonymous classes
-                        boolean staticInnerClass = false;
-                        boolean implicitStatic = false;
-                        // Interfaces, Enums and Records are implicitly static
-                        if (!staticInnerClass) {
-                            staticInnerClass = (node.access & Opcodes.ACC_INTERFACE) != 0
-                                    || (node.access & Opcodes.ACC_RECORD) != 0
-                                    || ((node.access & Opcodes.ACC_ENUM) != 0 && node.superName.equals("java/lang/Enum"));
-                            implicitStatic = staticInnerClass;
-                        }
-                        // Member classes of interfaces are implicitly static
-                        if (!staticInnerClass) {
-                            ClassNode outerClassNode = indexedNodes.get(outerNode);
-                            staticInnerClass = outerClassNode != null && (outerClassNode.access & Opcodes.ACC_INTERFACE) != 0;
-                            implicitStatic = staticInnerClass;
-                        }
-                        // The constructor of non-static inner classes must take in an instance of the outer class an
-                        // argument
-                        if (!staticInnerClass && outerNode != null) {
-                            boolean staticConstructor = false;
-                            for (MethodNode method : node.methods) {
-                                if (method.name.equals("<init>")) {
-                                    int outernodeLen = outerNode.length();
-                                    if (outernodeLen + 2 > method.desc.length()) {
-                                        // The reference to the outer class cannot be passed in via a parameter as there
-                                        // i no space for it in the descriptor, so the class has to be static
-                                        staticConstructor = true;
-                                        break;
-                                    }
-                                    String arg = method.desc.substring(2, outernodeLen + 2);
-                                    if (!arg.equals(outerNode)) {
-                                        // Has to be static. The other parameters are irrelevant as the outer class
-                                        // reference is always at first place.
-                                        staticConstructor = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (staticConstructor) {
-                                staticInnerClass = true;
-                                implicitStatic = false;
-                            }
-                        }
-                        if (staticInnerClass && !implicitStatic) {
-                            for (FieldNode field : node.fields) {
-                                if ((field.access & Opcodes.ACC_FINAL) != 0 && field.name.startsWith("this$")) {
-                                    System.err.println("Falsely identified " + node.name + " as static inner class.");
-                                    staticInnerClass = false;
-                                }
-                            }
-                        }
-
-                        int innerClassAccess = node.access & ~Opcodes.ACC_SUPER; // Super is not allowed for inner class nodes
-
-                        // Don't fall to the temptation of adding ACC_STATIC to the class node.
-                        // According the the ASM verifier it is not legal to do so. However the JVM does not seem care
-                        // Nonetheless, we are not adding it the access flags of the class, though we will add it in the inner
-                        // class node
-                        if (!staticInnerClass) {
-                            // Beware of https://docs.oracle.com/javase/specs/jls/se16/html/jls-8.html#jls-8.1.3
-                            node.outerClass = outerNode;
-                        } else {
-                            innerClassAccess |= Opcodes.ACC_STATIC;
-                        }
-                        innerClassNode = new InnerClassNode(node.name, outerNode, innerMost, innerClassAccess);
-                    }
-                    parents.get(outerNode).add(innerClassNode);
-                    splitInner.put(node.name, innerClassNode);
-                    node.innerClasses.add(innerClassNode);
-                }
-            }
-        }
-        for (ClassNode node : this.getClasses()) {
-            // General sweep
-            Collection<InnerClassNode> innerNodesToAdd = new ArrayList<>();
-            for (FieldNode field : node.fields) {
-                String descriptor = field.desc;
-                if (descriptor.length() < 4) {
-                    continue; // Most likely a primitive
-                }
-                if (descriptor.charAt(0) == '[') {
-                    // Array
-                    descriptor = descriptor.substring(2, descriptor.length() - 1);
-                } else {
-                    // Non-array
-                    descriptor = descriptor.substring(1, descriptor.length() - 1);
-                }
-                InnerClassNode innerNode = splitInner.get(descriptor);
-                if (innerNode != null) {
-                    if (innerNode.innerName == null && !field.name.startsWith("this$")) {
-                        // Not fatal, but worrying
-                        System.err.printf("Unlikely field descriptor for field \"%s\" with descriptor %s in class %s%n", field.name, field.desc, node.name);
-                    }
-                    innerNodesToAdd.add(innerNode);
-                }
-            }
-            // Apply inner nodes
-            HashSet<String> entryNames = new HashSet<>();
-            for (InnerClassNode inner : innerNodesToAdd) {
-                if (entryNames.add(inner.name)) {
-                    node.innerClasses.add(inner);
-                }
-            }
-        }
-        // Add inner classes to the parent of the anonymous classes
-        for (Map.Entry<String, List<InnerClassNode>> entry : parents.entrySet()) {
-            // Remove duplicates
-            HashSet<String> entryNames = new HashSet<>();
-            ArrayList<InnerClassNode> toRemove = new ArrayList<>();
-            for (InnerClassNode inner : entry.getValue()) {
-                if (!entryNames.add(inner.name)) {
-                    toRemove.add(inner);
-                }
-            }
-            toRemove.forEach(entry.getValue()::remove);
-            ClassNode node = indexedNodes.get(entry.getKey());
-            for (InnerClassNode innerEntry : entry.getValue()) {
-                boolean skip = false;
-                for (InnerClassNode inner : node.innerClasses) {
-                    if (inner.name.equals(innerEntry.name)) {
-                        skip = true;
-                        break;
-                    }
-                }
-                if (!skip) {
-                    node.innerClasses.add(innerEntry);
-                }
-            }
-        }
-    }
-    
-
-    /**
-     * Method that tries to restore the SwitchMaps to how they should be.
-     * This includes marking the switchmap classes as anonymous classes, so they may not be referenceable
-     * afterwards.
-     *
-     * @return The amount of classes who were identified as switch maps.
-     */
-    private int doFixSwitchMaps() {
-        Map<FieldReference, String> deobfNames = new HashMap<>(); // The deobf name will be something like $SwitchMap$org$bukkit$Material
-
-        // index switch map classes - or at least their candidates
-        for (ClassNode node : getClasses()) {
-            if (node.superName != null && node.superName.equals("java/lang/Object") && node.interfaces.isEmpty()) {
-                if (node.fields.size() == 1 && node.methods.size() == 1) {
-                    MethodNode method = node.methods.get(0);
-                    FieldNode field = node.fields.get(0);
-                    if (method.name.equals("<clinit>") && method.desc.equals("()V")
-                            && field.desc.equals("[I")
-                            && (field.access & Opcodes.ACC_STATIC) != 0) {
-                        FieldReference fieldRef = new FieldReference(node.name, field);
-                        String enumName = null;
-                        AbstractInsnNode instruction = method.instructions.getFirst();
-                        while (instruction != null) {
-                            if (instruction instanceof FieldInsnNode && instruction.getOpcode() == Opcodes.GETSTATIC) {
-                                FieldInsnNode fieldInstruction = (FieldInsnNode) instruction;
-                                if (fieldRef.equals(new FieldReference(fieldInstruction))) {
-                                    AbstractInsnNode next = instruction.getNext();
-                                    while (next instanceof FrameNode || next instanceof LabelNode) {
-                                        // ASM is sometimes not so nice
-                                        next = next.getNext();
-                                    }
-                                    if (next instanceof FieldInsnNode && next.getOpcode() == Opcodes.GETSTATIC) {
-                                        if (enumName == null) {
-                                            enumName = ((FieldInsnNode) next).owner;
-                                        } else if (!enumName.equals(((FieldInsnNode) next).owner)) {
-                                            enumName = null;
-                                            break; // It may not be a switchmap field
-                                        }
-                                    }
-                                }
-                            }
-                            instruction = instruction.getNext();
-                        }
-                        if (enumName != null) {
-                            if (fieldRef.getName().indexOf('$') == -1) {
-                                // The deobf name will be something like $SwitchMap$org$bukkit$Material
-                                String newName = "$SwitchMap$" + enumName.replace('/', '$');
-                                deobfNames.put(fieldRef, newName);
-                                instruction = method.instructions.getFirst();
-                                // Remap references within this class
-                                while (instruction != null) {
-                                    if (instruction instanceof FieldInsnNode) {
-                                        FieldInsnNode fieldInsn = (FieldInsnNode) instruction;
-                                        if ((fieldInsn.getOpcode() == Opcodes.GETSTATIC || fieldInsn.getOpcode() == Opcodes.PUTSTATIC)
-                                                && fieldInsn.owner.equals(node.name)
-                                                && fieldRef.equals(new FieldReference(fieldInsn))) {
-                                            fieldInsn.name = newName;
-                                        }
-                                    }
-                                    instruction = instruction.getNext();
-                                }
-                                // Remap the actual field declaration
-                                // Switch maps can only contain a single field and we have already obtained said field, so it isn't much of a deal here
-                                field.name = newName;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Rename references to the field
-        for (ClassNode node : getClasses()) {
-            Set<String> addedInnerClassNodes = new HashSet<>();
-            for (MethodNode method : node.methods) {
-                AbstractInsnNode instruction = method.instructions.getFirst();
-                while (instruction != null) {
-                    if (instruction instanceof FieldInsnNode && instruction.getOpcode() == Opcodes.GETSTATIC) {
-                        FieldInsnNode fieldInstruction = (FieldInsnNode) instruction;
-                        if (fieldInstruction.owner.equals(node.name)) { // I have no real idea what I was doing here
-                            instruction = instruction.getNext();
-                            continue;
-                        }
-                        FieldReference fRef = new FieldReference(fieldInstruction);
-                        String newName = deobfNames.get(fRef);
-                        if (newName != null) {
-                            fieldInstruction.name = newName;
-                            if (!addedInnerClassNodes.contains(fRef.getOwner())) {
-                                InnerClassNode innerClassNode = new InnerClassNode(fRef.getOwner(), node.name, null, Opcodes.ACC_STATIC ^ Opcodes.ACC_SYNTHETIC ^ Opcodes.ACC_FINAL);
-                                ClassNode outerNode = getClass(fRef.getOwner());
-                                if (outerNode != null) {
-                                    outerNode.innerClasses.add(innerClassNode);
-                                }
-                                ClassNode outermostClassnode = null;
-                                if (node.outerClass != null) {
-                                    outermostClassnode = getClass(node.outerClass);
-                                }
-                                if (outermostClassnode == null) {
-                                    for (InnerClassNode inner : node.innerClasses) {
-                                        if (inner.name.equals(node.name) && inner.outerName != null) {
-                                            outermostClassnode = getClass(inner.outerName);
-                                            break;
-                                        }
-                                    }
-                                }
-                                if (outermostClassnode != null) {
-                                    outermostClassnode.innerClasses.add(innerClassNode);
-                                }
-                                node.innerClasses.add(innerClassNode);
-                            }
-                        }
-                    }
-                    instruction = instruction.getNext();
-                }
-            }
-        }
-
-        return deobfNames.size();
-    }
-
-    /**
-     * Guesses anonymous inner classes by checking whether they have a synthetic field and if they
-     * do whether they are referenced only by a single "parent" class.
-     * Note: this method is VERY aggressive when it comes to adding inner classes, sometimes it adds
-     * inner classes on stuff where it wouldn't belong. This  means that usage of this method should
-     * be done wisely. This method will do some damage even if it does no good.
-     *
-     * @return The amount of guessed anonymous inner classes
-     */
-    private int doGuessAnonymousInnerClasses() {
-
-        // Class name -> referenced class, method
-        // I am well aware that we are using method node, but given that there can be multiple methods with the same
-        // name it is better to use MethodNode instead of String to reduce object allocation overhead.
-        // Should we use triple instead? Perhaps.
-        HashMap<String, Map.Entry<String, MethodNode>> candidates = new LinkedHashMap<>();
-        for (ClassNode node : getClasses()) {
-            if ((node.access & Constants.VISIBILITY_MODIFIERS) != 0) {
-                continue; // Anonymous inner classes are always package-private
-            }
-            boolean skipClass = false;
-            FieldNode outerClassReference = null;
-            for (FieldNode field : node.fields) {
-                final int requiredFlags = Opcodes.ACC_SYNTHETIC | Opcodes.ACC_FINAL;
-                if ((field.access & requiredFlags) == requiredFlags
-                        && (field.access & Constants.VISIBILITY_MODIFIERS) == 0) {
-                    if (outerClassReference != null) {
-                        skipClass = true;
-                        break; // short-circuit
-                    }
-                    outerClassReference = field;
-                }
-            }
-            if (skipClass || outerClassReference == null) {
-                continue;
-            }
-            // anonymous classes can only have a single constructor since they are only created at a single spot
-            // However they also have to have a constructor so they can pass the outer class reference
-            MethodNode constructor = null;
-            for (MethodNode method : node.methods) {
-                if (method.name.equals("<init>")) {
-                    if (constructor != null) {
-                        // cannot have multiple constructors
-                        skipClass = true;
-                        break; // short-circuit
-                    }
-                    if ((method.access & Constants.VISIBILITY_MODIFIERS) != 0) {
-                        // The constructor should be package - protected
-                        skipClass = true;
-                        break;
-                    }
-                    constructor = method;
-                }
-            }
-            if (skipClass || constructor == null) { // require a single constructor, not more, not less
-                continue;
-            }
-            // since we have the potential reference to the outer class and we know that it has to be set
-            // via the constructor's parameter, we can check whether this is the case here
-            DescString desc = new DescString(constructor.desc);
-            skipClass = true;
-            while (desc.hasNext()) {
-                String type = desc.nextType();
-                if (type.equals(outerClassReference.desc)) {
-                    skipClass = false;
-                    break;
-                }
-            }
-            if (skipClass) {
-                continue;
-            }
-            int dollarIndex = node.name.indexOf('$');
-            if (dollarIndex != -1 && !Character.isDigit(node.name.codePointAt(dollarIndex + 1))) {
-                // Unobfuscated class that is 100% not anonymous
-                continue;
-            }
-            candidates.put(node.name, null);
-        }
-
-        // Make sure that the constructor is only invoked in a single class, which should be the outer class
-        for (ClassNode node : getClasses()) {
-            for (MethodNode method : node.methods) {
-                AbstractInsnNode instruction = method.instructions.getFirst();
-                while (instruction != null) {
-                    if (instruction instanceof MethodInsnNode && ((MethodInsnNode)instruction).name.equals("<init>")) {
-                        MethodInsnNode methodInvocation = (MethodInsnNode) instruction;
-                        String owner = methodInvocation.owner;
-                        if (candidates.containsKey(owner)) {
-                            if (owner.equals(node.name)) {
-                                // this is no really valid anonymous class
-                                candidates.remove(owner);
-                            } else {
-                                Map.Entry<String, MethodNode> invoker = candidates.get(owner);
-                                if (invoker == null) {
-                                    candidates.put(owner, new AbstractMap.SimpleEntry(node.name, method));
-                                } else if (!invoker.getKey().equals(node.name)
-                                        || !invoker.getValue().name.equals(method.name)
-                                        || !invoker.getValue().desc.equals(method.desc)) {
-                                    // constructor referenced by multiple classes, cannot be valid
-                                    // However apparently these classes could be extended? I am not entirely sure how that is possible, but it is.
-                                    // That being said, we are going to ignore that this is possible and just consider them invalid
-                                    // as everytime this happens the decompiler is able to decompile the class without any issues.
-                                    candidates.remove(owner);
-                                }
-                            }
-                        }
-                    }
-                    instruction = instruction.getNext();
-                }
-            }
-        }
-
-        // If another class has a field reference to the potential anonymous class, and that field is not
-        // synthetic, then the class is likely not anonymous.
-        // In the future I could settle with not checking for the anonymous access flag, but this would
-        // be quite the effort to get around nonetheless since previous steps of this method utilise
-        // this access flag
-        for (ClassNode node : getClasses()) {
-            for (FieldNode field : node.fields) {
-                if (field.desc.length() == 1 || (field.access & Opcodes.ACC_SYNTHETIC) != 0) {
-                    continue;
-                }
-                if (field.desc.codePointAt(field.desc.lastIndexOf('[') + 1) != 'L') {
-                    continue;
-                }
-                // Now technically, they are still inner classes. Just regular ones and they are not static ones
-                // however not adding them as a inner class has no effect in recomplieabillity so we will not really care about it just yet.
-                // TODO that being said, we should totally do it
-                String className = field.desc.substring(field.desc.lastIndexOf('[') + 2, field.desc.length() - 1);
-                candidates.remove(className);
-            }
-        }
-
-        int addedInners = 0;
-        for (Map.Entry<String, Map.Entry<String, MethodNode>> candidate : candidates.entrySet()) {
-            String inner = candidate.getKey();
-            Map.Entry<String, MethodNode> outer = candidate.getValue();
-            if (outer == null) {
-                continue;
-            }
-            ClassNode innerNode = getClass(inner);
-            ClassNode outernode = getClass(outer.getKey());
-
-            MethodNode outerMethod = outer.getValue();
-            if (outernode == null) {
-                continue;
-            }
-            boolean hasInnerClassInfoInner = false;
-            for (InnerClassNode icn : innerNode.innerClasses) {
-                if (icn.name.equals(inner)) {
-                    hasInnerClassInfoInner = true;
-                    break;
-                }
-            }
-            boolean hasInnerClassInfoOuter = false;
-            for (InnerClassNode icn : outernode.innerClasses) {
-                if (icn.name.equals(inner)) {
-                    hasInnerClassInfoOuter = true;
-                    break;
-                }
-            }
-            if (hasInnerClassInfoInner && hasInnerClassInfoOuter) {
-                continue;
-            }
-            InnerClassNode newInnerClassNode = new InnerClassNode(inner, null, null, 16400);
-            if (!hasInnerClassInfoInner) {
-                innerNode.outerMethod = outerMethod.name;
-                innerNode.outerMethodDesc = outerMethod.desc;
-                innerNode.outerClass = outernode.name;
-                innerNode.innerClasses.add(newInnerClassNode);
-            }
-            if (!hasInnerClassInfoOuter) {
-                outernode.innerClasses.add(newInnerClassNode);
-            }
-            addedInners++;
-        }
-
-        return addedInners;
     }
 	
     public static void indexJar(Path path, Injector injector) {

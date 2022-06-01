@@ -24,6 +24,8 @@ public class Exceptions {
 			    line = line.trim();
 			    if (line.isEmpty() || line.startsWith("#"))
 			        return;
+			    // New: net/minecraft/client/Minecraft/startGame()V org/lwjgl/LWJGLException java/io/IOException
+			    // Old: net/minecraft/client/Minecraft.startGame()V=org/lwjgl/LWJGLException,java/io/IOException
 			    boolean oldFormat = line.contains(".");
 			    int idx = oldFormat ? line.lastIndexOf('=') : line.indexOf(' ', line.indexOf(' ') + 1);
 			    if (idx == -1) return;

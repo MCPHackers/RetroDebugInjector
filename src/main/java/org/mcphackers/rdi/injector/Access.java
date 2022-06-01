@@ -47,7 +47,9 @@ public class Access {
 				line = line.trim();
 				if (line.isEmpty() || line.startsWith("#"))
 					return;
-
+			    // PUBLIC net/minecraft/client/Minecraft
+			    // PRIVATE net/minecraft/client/Minecraft fullscreen
+			    // PROTECTED net/minecraft/client/Minecraft startGame ()V
 				int idx = line.indexOf(' ');
 				Level level = Level.valueOf(line.substring(0, idx));
 				String key = line.substring(idx + 1);

@@ -10,7 +10,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class FixBridges extends ClassVisitor {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	
 	public FixBridges(ClassVisitor cv) {
 		super(cv);
@@ -18,7 +18,11 @@ public class FixBridges extends ClassVisitor {
 
 	protected void visitClass(ClassNode node) {
 		super.visitClass(node);
-		boolean resolveTRArtifact = true;
+		fixComparators(node);
+	}
+	
+	private void fixComparators(ClassNode node) {
+
         if (node.interfaces.size() != 1) {
             return;
         }
@@ -40,59 +44,49 @@ public class FixBridges extends ClassVisitor {
 		            while (insn instanceof LabelNode || insn instanceof LineNumberNode) {
 		                insn = insn.getNext();
 		            }
-		            if (insn.getOpcode() != Opcodes.ALOAD) {
-		                throw new IllegalStateException("invalid bridge method: unexpected opcode");
+		            int[] opcodes = {
+		            		Opcodes.ALOAD,
+		            		Opcodes.ALOAD,
+		            		Opcodes.CHECKCAST,
+		            		Opcodes.ALOAD,
+		            		Opcodes.CHECKCAST,
+		            		Opcodes.INVOKEVIRTUAL,
+		            		Opcodes.IRETURN
+		            		};
+		            MethodInsnNode invokevirtual = null;
+		            for(int i = 0; i < opcodes.length; i++) {
+		            	if(i != 0) {
+				            insn = insn.getNext();
+		            	}
+			            if (insn.getOpcode() != opcodes[i]) {
+			                throw new IllegalStateException("invalid bridge method: unexpected opcode");
+			            }
+		            	if(i == 0) {
+		            		VarInsnNode aloadThis = (VarInsnNode) insn;
+				            if (aloadThis.var != 0) {
+				                throw new IllegalStateException("invalid bridge method: unexpected variable loaded");
+				            }
+		            	}
+		            	if(opcodes[i] == Opcodes.INVOKEVIRTUAL) {
+				            invokevirtual = (MethodInsnNode) insn;
+		            	}
 		            }
-		            VarInsnNode aloadThis = (VarInsnNode) insn;
-		            if (aloadThis.var != 0) {
-		                throw new IllegalStateException("invalid bridge method: unexpected variable loaded");
-		            }
-		            insn = insn.getNext();
-		            if (insn.getOpcode() != Opcodes.ALOAD) {
-		                throw new IllegalStateException("invalid bridge method: unexpected opcode");
-		            }
-		            insn = insn.getNext();
-		            if (insn.getOpcode() != Opcodes.CHECKCAST) {
-		                throw new IllegalStateException("invalid bridge method: unexpected opcode");
-		            }
-		            insn = insn.getNext();
-		            if (insn.getOpcode() != Opcodes.ALOAD) {
-		                throw new IllegalStateException("invalid bridge method: unexpected opcode");
-		            }
-		            insn = insn.getNext();
-		            if (insn.getOpcode() != Opcodes.CHECKCAST) {
-		                throw new IllegalStateException("invalid bridge method: unexpected opcode");
-		            }
-		            insn = insn.getNext();
-		            if (insn.getOpcode() != Opcodes.INVOKEVIRTUAL) {
-		                throw new IllegalStateException("invalid bridge method: unexpected opcode");
-		            }
-		            MethodInsnNode invokevirtual = (MethodInsnNode) insn;
-		            insn = insn.getNext();
-		            if (insn.getOpcode() != Opcodes.IRETURN) {
-		                throw new IllegalStateException("invalid bridge method: unexpected opcode");
-		            }
-		            boolean methodCallIsInvalid = true;
 		            for (MethodNode m : node.methods) {
 		                if (m.name.equals(invokevirtual.name) && m.desc.equals(invokevirtual.desc)) {
-		                    methodCallIsInvalid = false;
+		                	//Rename called method
+		                    m.name = invokevirtual.name = "compare";
 		                    break;
 		                }
 		            }
-		            if (methodCallIsInvalid) {
-		                if (resolveTRArtifact) {
-		                    // Tiny remapper artifact
-		                    invokevirtual.name = "compare";
-		                } else {
-		                    throw new IllegalStateException("invalid bridge method: method does not exist (consider setting resolveTRArtifact to true)");
-		                }
-		            }
+		            //Add generics
 		            String generics = invokevirtual.desc.substring(1, invokevirtual.desc.indexOf(';'));
 		            node.signature = "Ljava/lang/Object;Ljava/util/Comparator<" + generics + ";>;";
-		            method.access |= Opcodes.ACC_BRIDGE;
+		            //Remove bridge
+                    node.methods.remove(method);
 		            break;
 		        }
         	} catch (IllegalStateException e) {
+        		// Not a bridge
 	            method.access &= ~Opcodes.ACC_BRIDGE;
 	        	if(DEBUG) e.printStackTrace();
         	}

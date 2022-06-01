@@ -30,6 +30,11 @@ public class ClassInitAdder extends ClassVisitor {
 			constructors.add(node.desc);
 		}
 	}
+	@Override
+	public void visitClass(ClassNode node) {
+		super.visitClass(node);
+		constructors.clear();
+	}
 
 	@Override
 	public void visitEnd(ClassNode node) {
@@ -40,6 +45,9 @@ public class ClassInitAdder extends ClassVisitor {
 			return;
 		}
 		ClassNode superClass = injector.getClass(superName);
+		if(superClass == null) {
+			return;
+		}
 		for(MethodNode method : superClass.methods) {
 			// Adding implicit constructor
 			if("<init>".equals(method.name)) {
