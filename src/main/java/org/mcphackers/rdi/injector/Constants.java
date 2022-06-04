@@ -1,4 +1,4 @@
-package org.mcphackers.rdi.util;
+package org.mcphackers.rdi.injector;
 
 import org.objectweb.asm.Opcodes;
 
@@ -12,6 +12,7 @@ public class Constants {
         {
             add("Ljava/util/Vector;");
             add("Ljava/util/List;");
+            add("Ljava/util/LinkedList;");
             add("Ljava/util/ArrayList;");
             add("Ljava/util/Collection;");
             add("Ljava/util/AbstractCollection;");
@@ -42,6 +43,7 @@ public class Constants {
         {
             add("Ljava/util/Vector;");
             add("Ljava/util/List;");
+            add("Ljava/util/LinkedList;");
             add("Ljava/util/ArrayList;");
             add("Ljava/util/Collection;");
             add("Ljava/util/AbstractCollection;");
@@ -64,6 +66,15 @@ public class Constants {
             add("Ljava/util/Deque;");
             add("Ljava/util/ArrayDeque;");
             add("Ljava/lang/Iterable;");
+        }
+    };
+    public static final Set<String> LISTS = new HashSet<String>() {
+    	
+        {
+            add("Ljava/util/List;");
+            add("Ljava/util/LinkedList;");
+            add("Ljava/util/ArrayList;");
+            add("Ljava/util/AbstractList;");
         }
     };
 

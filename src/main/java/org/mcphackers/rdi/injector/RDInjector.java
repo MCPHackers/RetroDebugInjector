@@ -11,13 +11,13 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import org.mcphackers.rdi.injector.transform.AddGenerics;
+import org.mcphackers.rdi.injector.transform.FixBridges;
 import org.mcphackers.rdi.injector.transform.Injection;
 import org.mcphackers.rdi.injector.transform.Transform;
 import org.mcphackers.rdi.injector.visitors.AccessFixer;
 import org.mcphackers.rdi.injector.visitors.AddExceptions;
 import org.mcphackers.rdi.injector.visitors.ClassInitAdder;
 import org.mcphackers.rdi.injector.visitors.ClassVisitor;
-import org.mcphackers.rdi.injector.visitors.FixBridges;
 import org.mcphackers.rdi.injector.visitors.FixParameterLVT;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
@@ -97,13 +97,13 @@ public class RDInjector implements Injector {
 		return this;
     }
     
-    public RDInjector fixParameterLVT() {
-    	visitorStack = new FixParameterLVT(visitorStack);
+    public RDInjector fixBridges() {
+    	globalTransform.add(new FixBridges(this));
 		return this;
     }
     
-    public RDInjector fixBridges() {
-    	visitorStack = new FixBridges(visitorStack);
+    public RDInjector fixParameterLVT() {
+    	visitorStack = new FixParameterLVT(visitorStack);
 		return this;
     }
     

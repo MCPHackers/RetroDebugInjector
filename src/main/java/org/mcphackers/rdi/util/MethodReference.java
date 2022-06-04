@@ -1,31 +1,26 @@
-package org.mcphackers.rdi.injector;
+package org.mcphackers.rdi.util;
 
 import java.util.Locale;
 import java.util.Objects;
 
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 
-/**
- * A reference to a field within a class.
- * This class is similar to {@link FieldNode} / {@link FieldInsnNode} though with a few
- * "useless" features removed so it can be used for one thing only.
- */
-public final class FieldReference {
+public class MethodReference {
 
     private final String desc;
     private final String name;
     private final String owner;
 
-    public FieldReference(FieldInsnNode instruction) {
+    public MethodReference(MethodInsnNode instruction) {
         this(instruction.owner, instruction.desc, instruction.name);
     }
 
-    public FieldReference(String owner, FieldNode node) {
+    public MethodReference(String owner, MethodNode node) {
         this(owner, node.desc, node.name);
     }
 
-    public FieldReference(String owner, String desc, String name) {
+    public MethodReference(String owner, String desc, String name) {
         this.owner = owner;
         this.name = name;
         this.desc = desc;
@@ -36,11 +31,20 @@ public final class FieldReference {
         if (obj == this) {
             return true;
         }
-        if (!(obj instanceof FieldReference)) {
+        if (!(obj instanceof MethodReference)) {
             return false;
         }
-        FieldReference other = (FieldReference) obj;
+        MethodReference other = (MethodReference) obj;
         return other.name.equals(this.name) && other.desc.equals(this.desc) && other.owner.equals(this.owner);
+    }
+
+    /**
+     * Obtains the method descriptor of the referenced method
+     *
+     * @return The method descriptor
+     */
+    public String getDesc() {
+        return desc;
     }
 
     public String getName() {
@@ -57,23 +61,13 @@ public final class FieldReference {
         return owner;
     }
 
-    /**
-     * Obtains the field descriptor of the referred field
-     *
-     * @return The field descriptor
-     */
-    public String getDesc() {
-        return desc;
-    }
-
     @Override
     public int hashCode() {
-//        return (owner.hashCode() & 0xFFFF0000 | name.hashCode() & 0x0000FFFF) ^ desc.hashCode();
         return Objects.hash(owner, name, desc);
     }
 
     @Override
     public String toString() {
-        return String.format(Locale.ROOT, "FieldReference[owner=\"%s\",name=\"%s\",desc=\"%s\"]", this.owner, this.name, this.desc);
+        return String.format(Locale.ROOT, "MethodReference[owner=\"%s\",name=\"%s\",desc=\"%s\"]", this.owner, this.name, this.desc);
     }
 }

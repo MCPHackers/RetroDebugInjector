@@ -10,10 +10,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.mcphackers.rdi.injector.FieldReference;
+import org.mcphackers.rdi.injector.Constants;
 import org.mcphackers.rdi.injector.Injector;
-import org.mcphackers.rdi.util.Constants;
 import org.mcphackers.rdi.util.DescString;
+import org.mcphackers.rdi.util.FieldReference;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;

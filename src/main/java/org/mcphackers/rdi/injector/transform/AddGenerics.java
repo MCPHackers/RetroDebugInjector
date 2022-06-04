@@ -1,12 +1,19 @@
 package org.mcphackers.rdi.injector.transform;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import org.mcphackers.rdi.injector.Constants;
 import org.mcphackers.rdi.injector.Generics;
 import org.mcphackers.rdi.injector.Injector;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
 public class AddGenerics implements Injection {
+	private final Map<String, Boolean> cachedTypes = new HashMap<>();
+	
 	private final Generics context;
 	private final Injector injector;
 
@@ -27,8 +34,43 @@ public class AddGenerics implements Injection {
 				String sig = context.getFieldSignature(node.name, field.name);
 				if(sig != null) {
 					field.signature = sig;
+					if(isList(field.desc)) {
+						
+					}
 				}
 			}
 		}
+		for (ClassNode node : injector.getClasses()) {
+			for(MethodNode method : node.methods) {
+				
+			}
+		}
+	}
+	
+	private boolean isList(String desc) {
+		if(cachedTypes.containsKey(desc)) {
+			return cachedTypes.get(desc);
+		}
+		boolean check = checkList(desc);
+		cachedTypes.put(desc, check);
+		return check;
+	}
+
+	private boolean checkList(String desc) {
+		Type t = Type.getType(desc);
+		if(t.getSort() == Type.ARRAY) {
+			return false;
+		}
+		ClassNode checkedNode = injector.getClass(t.getInternalName());
+		while(checkedNode != null) {
+			if(checkedNode.interfaces.contains("java/util/List")) {
+				return true;
+			}
+			if(Constants.LISTS.contains("L" + checkedNode.superName + ";")) {
+				return true;
+			}
+			checkedNode = injector.getClass(checkedNode.superName);
+		}
+		return false;
 	}
 }
