@@ -1,6 +1,7 @@
 package org.mcphackers.rdi.injector.transform;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -20,6 +21,10 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
+/**
+ * This class is a nightmare and really scares me, you too probably
+ *
+ */
 public class FixBridges implements Injection {
 	
 	private Injector injector;
@@ -34,7 +39,7 @@ public class FixBridges implements Injection {
 
 	private ClassNode getParametrizedParent(ClassNode node) {
 		for (Entry<ClassNode, List<ClassNode>> classNodes : genericsTree.entrySet()) {
-			if(classNodes.getValue().contains(node)) {
+			if(classNodes.getValue() != null && classNodes.getValue().contains(node)) {
 				return classNodes.getKey();
 			}
 		}
@@ -46,40 +51,40 @@ public class FixBridges implements Injection {
 		this.injector = injector;
 	}
 	
-	private void deleteBridges(ClassNode currentNode, Map<String, String> cachedNames) {
-		if(getParametrizedChildren(currentNode) != null) {
-			for(ClassNode node : getParametrizedChildren(currentNode)) {
-				Set<BridgePair> forRemoval = bridges.get(node);
-				if(forRemoval != null) {
-					for(BridgePair pair : forRemoval) {
-						// Removing bridges
-						if(!cachedNames.containsKey(pair.renamedMethod.name)) {
-							cachedNames.put(pair.renamedMethod.name, pair.removedMethod.name);
-						}
-						String rename = pair.removedMethod.name;
-						while (cachedNames.containsKey(rename) && cachedNames.get(rename) != null) {
-							rename = cachedNames.get(rename);
-						}
-						for(MethodNode method : node.methods) {
-				            for(AbstractInsnNode insn = method.instructions.getFirst(); insn != null ; insn = insn.getNext()) {
-				                if(insn.getOpcode() != Opcodes.INVOKESPECIAL) {
-				                    continue;
-				                }
-				            	MethodInsnNode invokespecial = (MethodInsnNode) insn;
-				            	if(currentNode.name.equals(invokespecial.owner) && pair.removedMethod.name.equals(invokespecial.name)) {
-				            		invokespecial.name = rename;
-				            	}
-				            }
-						}
-						pair.renamedMethod.name = rename;
-						node.methods.remove(pair.removedMethod);
-					}
+	private void removeAndCollectRenamedNodes(ClassNode node, Map<String, String> collectedNames) {
+		Set<BridgePair> forRemoval = bridges.get(node);
+		Map<String, String> methodRenames = new HashMap<>();
+		if(forRemoval != null) {
+			for(BridgePair pair : forRemoval) {
+				// Removing bridges
+				if(!collectedNames.containsKey(pair.renamedMethod.name)) {
+					collectedNames.put(pair.renamedMethod.name, pair.removedMethod.name);
 				}
-				deleteBridges(node, cachedNames);
+				String rename = pair.removedMethod.name;
+				while (collectedNames.containsKey(rename) && collectedNames.get(rename) != null && !collectedNames.get(rename).equals(rename)) {
+					rename = collectedNames.get(rename);
+				}
+				methodRenames.put(pair.renamedMethod.name, rename);
+				pair.renamedMethod.name = rename;
+				node.methods.remove(pair.removedMethod);
 			}
+		}
+		renamingMap.put(node.name, methodRenames);
+	}
+	
+	private void deleteBridges(ClassNode currentNode, Map<String, String> collectedNames) {
+		setGenerics(currentNode);
+		removeAndCollectRenamedNodes(currentNode, collectedNames);
+		if(getParametrizedChildren(currentNode) == null) {
+			return;
+		}
+		for(ClassNode node : getParametrizedChildren(currentNode)) {
+			deleteBridges(node, collectedNames);
 		}
 	}
 	
+	private Map<String, Map<String, String>> renamingMap = new HashMap<>();
+
 	@Override
 	public void transform() {
 		for(ClassNode node : injector.getClasses()) {
@@ -87,22 +92,42 @@ public class FixBridges implements Injection {
 				fixOtherBridges(node);
 			}
 		}
-		for (Entry<ClassNode, List<ClassNode>> entry : genericsTree.entrySet()) {
-			ClassNode current = entry.getKey();
-			setGenerics(current);
-			for(ClassNode cl : entry.getValue()) {
-				setGenerics(cl);
-			}
-		}
+		a:
 		for (Entry<ClassNode, List<ClassNode>> entry : genericsTree.entrySet()) {
 			ClassNode startNode = entry.getKey();
-			if(getParametrizedParent(startNode) == null) {
-				Map<String, String> renamingMap = new HashMap<>();
-				for(MethodNode method : startNode.methods) {
-					// I know this look dumb, but it's there to prevent other bridge methods occupying renaming keys of their parent
-					renamingMap.put(method.name, null);
+			if(getParametrizedParent(startNode) != null || !startNode.interfaces.isEmpty()) {
+				continue;
+			}
+			if(getParametrizedChildren(startNode) != null) {
+				for(ClassNode cn : getParametrizedChildren(startNode)) {
+					//FIXME temp fix for decompiling mc beta
+					if(!cn.interfaces.isEmpty()) continue a;
 				}
-				deleteBridges(startNode, renamingMap);
+			}
+			Map<String, String> renamingMap = new HashMap<>();
+			for(MethodNode method : startNode.methods) {
+				// I know this look dumb, but it's there to prevent other bridge methods occupying renaming keys of their parent
+				renamingMap.put(method.name, null);
+			}
+			deleteBridges(startNode, renamingMap);
+		}
+		for(ClassNode node : injector.getClasses()) {
+			for(MethodNode method : node.methods) {
+				// Update method references
+	            for(AbstractInsnNode insn = method.instructions.getFirst(); insn != null ; insn = insn.getNext()) {
+	                if(!(insn instanceof MethodInsnNode)) {
+	                    continue;
+	                }
+	            	MethodInsnNode invoke = (MethodInsnNode) insn;
+	            	Map<String, String> renameMap = renamingMap.get(invoke.owner);
+	            	String rename = null;
+	            	if(renameMap != null) {
+	            		rename = renameMap.get(invoke.name);
+	            	}
+	            	if(rename != null) {
+	            		invoke.name = rename;
+	            	}
+	            }
 			}
 		}
 	}
@@ -121,17 +146,21 @@ public class FixBridges implements Injection {
 		List<String> generics = globalGuessedGenerics.get(node);
 		if(generics == null)
 			return;
+		String interfaces = "";
+		for(String itf : node.interfaces) {
+			interfaces += "L" + itf + ";";
+		}
 		if(getParametrizedParent(node) != null && getParametrizedChildren(node) != null) {
-			node.signature = getGenerics(generics, true) + "L" + node.superName + getGenerics(generics.size()) + ";";
+			node.signature = getGenerics(generics, true) + "L" + node.superName + getGenerics(generics.size()) + ";" + interfaces;
 			for(MethodNode method : node.methods) {
 				method.signature = getMethodSig(generics, method.desc);
 			}
 		}
 		else if(getParametrizedParent(node) != null) {
-			node.signature = "L" + node.superName + getGenerics(generics, false) + ";";
+			node.signature = "L" + node.superName + getGenerics(generics, false) + ";" + interfaces;
 		}
 		else if(getParametrizedChildren(node) != null) {
-			node.signature = getGenerics(generics, true) + "L" + node.superName + ";";
+			node.signature = getGenerics(generics, true) + "L" + node.superName + ";" + interfaces;
 			for(MethodNode method : node.methods) {
 				method.signature = getMethodSig(generics, method.desc);
 			}
@@ -168,11 +197,10 @@ public class FixBridges implements Injection {
 	private List<MethodNode> visitedNodes = new ArrayList<>();
 	
 	private void fixOtherBridges(ClassNode node) {
-		// Unsure how to handle class nodes with interfaces
-        if (!node.interfaces.isEmpty()) {
-        	return;
-        }
 		ClassNode superClass = injector.getClass(node.superName);
+        if (superClass != null && !node.interfaces.isEmpty()) {
+        	superClass = injector.getClass(node.interfaces.get(0));
+        }
 		List<String> guessedGenerics = new ArrayList<>();
 		List<String> guessedGenericsSuper = new ArrayList<>();
 		Set<BridgePair> bridges = new HashSet<>();
@@ -210,6 +238,7 @@ public class FixBridges implements Injection {
                 	if(!guessedGenerics.contains(desc)) {
                 		guessedGenerics.add(desc);
                 	}
+                	//TODO save method signature
                 	//Guess generics for superclass (it'll be corrected once it visits it's bridge methods)
                 	if(superClass != null && globalGuessedGenerics.get(superClass) == null) {
 	                	for(MethodNode m : superClass.methods) {
@@ -227,6 +256,16 @@ public class FixBridges implements Injection {
         		continue;
         	}
         	MethodInsnNode invokevirtual = (MethodInsnNode) insn;
+            // Account for different return types
+            Type typeRet = Type.getReturnType(method.desc);
+            Type typeRet2 = Type.getReturnType(invokevirtual.desc);
+            if(typeRet.getSort() == Type.OBJECT && typeRet2.getSort() == Type.OBJECT && !typeRet.equals(typeRet2) &&
+            		!typeRet2.getInternalName().equals(node.name)) {
+	        	String desc = typeRet2.getDescriptor();
+	        	if(!guessedGenerics.contains(desc)) {
+	        		guessedGenerics.add(desc);
+	        	}
+            }
             insn = insn.getNext();
             Type retType = Type.getReturnType(method.desc);
             if (retType.getOpcode(Opcodes.IRETURN) != insn.getOpcode()) {
@@ -242,7 +281,7 @@ public class FixBridges implements Injection {
                 }
             }
             if(renamedMethod != null) {
-            	bridges.add(new BridgePair(method, renamedMethod));
+            	bridges.add(new BridgePair(node, method, renamedMethod));
             }
         }
 		if(!bridges.isEmpty()) {
@@ -262,23 +301,28 @@ public class FixBridges implements Injection {
 		        	genericsTree.put(supercl, nodes);
 		        }
 			}
+			else {
+				genericsTree.put(node, null);
+			}
 			this.bridges.put(node, bridges);
 		}
 	}
 	
 	public class BridgePair {
-		public MethodNode renamedMethod;
-		public MethodNode removedMethod;
-		public BridgePair(MethodNode node1, MethodNode node2) {
+		public final ClassNode ownerClass;
+		public final MethodNode renamedMethod;
+		public final MethodNode removedMethod;
+		public BridgePair(ClassNode owner, MethodNode node1, MethodNode node2) {
 			removedMethod = node1;
 			renamedMethod = node2;
+			ownerClass = owner;
 		}
 	}
 	
 	/**
 	 * Remove bridges and add generics for comparator class
 	 * @param node
-	 * @return true if processed node a comparator 
+	 * @return true if processed node is a comparator 
 	 */
 	private boolean fixComparator(ClassNode node) {
 
@@ -337,7 +381,8 @@ public class FixBridges implements Injection {
 		            for (MethodNode m : node.methods) {
 		                if (m.name.equals(invokevirtual.name) && m.desc.equals(invokevirtual.desc)) {
 		                	//Rename called method
-		                    m.name = invokevirtual.name = method.name;
+		                	renamingMap.put(node.name, Collections.singletonMap(m.name, method.name));
+		                    m.name = method.name;
 		                    break;
 		                }
 		            }

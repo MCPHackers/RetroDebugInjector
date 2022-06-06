@@ -12,7 +12,7 @@ import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
 public class AddGenerics implements Injection {
-	private final Map<String, Boolean> cachedTypes = new HashMap<>();
+	private final Map<String, Boolean> cachedLists = new HashMap<>();
 	
 	private final Generics context;
 	private final Injector injector;
@@ -48,11 +48,11 @@ public class AddGenerics implements Injection {
 	}
 	
 	private boolean isList(String desc) {
-		if(cachedTypes.containsKey(desc)) {
-			return cachedTypes.get(desc);
+		if(cachedLists.containsKey(desc)) {
+			return cachedLists.get(desc);
 		}
 		boolean check = checkList(desc);
-		cachedTypes.put(desc, check);
+		cachedLists.put(desc, check);
 		return check;
 	}
 
