@@ -3,9 +3,9 @@ package org.mcphackers.rdi.injector.transform;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.mcphackers.rdi.injector.Constants;
-import org.mcphackers.rdi.injector.Generics;
-import org.mcphackers.rdi.injector.Injector;
+import org.mcphackers.rdi.injector.data.ClassStorage;
+import org.mcphackers.rdi.injector.data.Constants;
+import org.mcphackers.rdi.injector.data.Generics;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
@@ -15,15 +15,15 @@ public class AddGenerics implements Injection {
 	private final Map<String, Boolean> cachedLists = new HashMap<>();
 	
 	private final Generics context;
-	private final Injector injector;
+	private final ClassStorage storage;
 
-	public AddGenerics(Injector injector, Generics context) {
+	public AddGenerics(ClassStorage storage, Generics context) {
 		this.context = context;
-		this.injector = injector;
+		this.storage = storage;
 	}
 	
 	public void transform() {
-		for (ClassNode node : injector.getClasses()) {
+		for (ClassNode node : storage.getClasses()) {
 			for(MethodNode method : node.methods) {
 				String sig = context.getMethodSignature(node.name, method.name, method.desc);
 				if(sig != null) {
@@ -40,7 +40,7 @@ public class AddGenerics implements Injection {
 				}
 			}
 		}
-		for (ClassNode node : injector.getClasses()) {
+		for (ClassNode node : storage.getClasses()) {
 			for(MethodNode method : node.methods) {
 				
 			}
@@ -61,7 +61,7 @@ public class AddGenerics implements Injection {
 		if(t.getSort() == Type.ARRAY) {
 			return false;
 		}
-		ClassNode checkedNode = injector.getClass(t.getInternalName());
+		ClassNode checkedNode = storage.getClass(t.getInternalName());
 		while(checkedNode != null) {
 			if(checkedNode.interfaces.contains("java/util/List")) {
 				return true;
@@ -69,7 +69,7 @@ public class AddGenerics implements Injection {
 			if(Constants.LISTS.contains("L" + checkedNode.superName + ";")) {
 				return true;
 			}
-			checkedNode = injector.getClass(checkedNode.superName);
+			checkedNode = storage.getClass(checkedNode.superName);
 		}
 		return false;
 	}

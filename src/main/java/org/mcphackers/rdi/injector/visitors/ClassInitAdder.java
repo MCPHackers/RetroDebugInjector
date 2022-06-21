@@ -7,20 +7,20 @@ import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.mcphackers.rdi.injector.Injector;
+import org.mcphackers.rdi.injector.data.ClassStorage;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
 public class ClassInitAdder extends ClassVisitor {
 
-	private Injector injector;
+	private ClassStorage storage;
 	private String superName;
 	private List<String> constructors = new LinkedList<>();
 
-	public ClassInitAdder(Injector injector, ClassVisitor cv) {
+	public ClassInitAdder(ClassStorage storage, ClassVisitor cv) {
 		super(cv);
-		this.injector = injector;
+		this.storage = storage;
 	}
 
 	@Override
@@ -44,7 +44,7 @@ public class ClassInitAdder extends ClassVisitor {
 		if(!constructors.isEmpty()) { // No implicit constructor needed
 			return;
 		}
-		ClassNode superClass = injector.getClass(superName);
+		ClassNode superClass = storage.getClass(superName);
 		if(superClass == null) {
 			return;
 		}

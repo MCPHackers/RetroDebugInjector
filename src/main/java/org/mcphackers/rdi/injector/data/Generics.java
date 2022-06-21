@@ -1,4 +1,4 @@
-package org.mcphackers.rdi.injector;
+package org.mcphackers.rdi.injector.data;
 
 import java.io.IOException;
 import java.nio.file.Files;

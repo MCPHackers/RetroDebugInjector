@@ -1,5 +1,5 @@
 plugins {
-    id 'java'
+	id 'java'
 }
 
 group 'me.zero'
@@ -9,19 +9,19 @@ sourceCompatibility = JavaVersion.VERSION_1_8
 targetCompatibility = JavaVersion.VERSION_1_8
 
 repositories {
-    mavenCentral()
+	mavenCentral()
 }
 
 dependencies {
-    // Dependencies
-    implementation "org.ow2.asm:asm:${project.asm_version}"
-    implementation "org.ow2.asm:asm-tree:${project.asm_version}"
+	// Dependencies
+	implementation "org.ow2.asm:asm:${project.asm_version}"
+	implementation "org.ow2.asm:asm-tree:${project.asm_version}"
 
-    // Testing frameworks
-    testImplementation "org.junit.jupiter:junit-jupiter-api:${project.junit_version}"
-    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${project.junit_version}"
+	// Testing frameworks
+	testImplementation "org.junit.jupiter:junit-jupiter-api:${project.junit_version}"
+	testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${project.junit_version}"
 }
 
 test {
-    useJUnitPlatform()
+	useJUnitPlatform()
 }

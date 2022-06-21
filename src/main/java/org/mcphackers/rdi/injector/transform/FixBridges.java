@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.mcphackers.rdi.injector.Injector;
+import org.mcphackers.rdi.injector.data.ClassStorage;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -27,7 +27,7 @@ import org.objectweb.asm.tree.VarInsnNode;
  */
 public class FixBridges implements Injection {
 	
-	private Injector injector;
+	private ClassStorage storage;
 
 	private Map<ClassNode, List<ClassNode>> genericsTree = new HashMap<>();
 	private Map<ClassNode, List<String>> globalGuessedGenerics = new HashMap<>();
@@ -47,8 +47,8 @@ public class FixBridges implements Injection {
 		
 	}
 
-	public FixBridges(Injector injector) {
-		this.injector = injector;
+	public FixBridges(ClassStorage storage) {
+		this.storage = storage;
 	}
 	
 	private void removeAndCollectRenamedNodes(ClassNode node, Map<String, String> collectedNames) {
@@ -87,7 +87,7 @@ public class FixBridges implements Injection {
 
 	@Override
 	public void transform() {
-		for(ClassNode node : injector.getClasses()) {
+		for(ClassNode node : storage.getClasses()) {
 			if(!fixComparator(node)) {
 				fixOtherBridges(node);
 			}
@@ -111,23 +111,23 @@ public class FixBridges implements Injection {
 			}
 			deleteBridges(startNode, renamingMap);
 		}
-		for(ClassNode node : injector.getClasses()) {
+		for(ClassNode node : storage.getClasses()) {
 			for(MethodNode method : node.methods) {
 				// Update method references
-	            for(AbstractInsnNode insn = method.instructions.getFirst(); insn != null ; insn = insn.getNext()) {
-	                if(!(insn instanceof MethodInsnNode)) {
-	                    continue;
-	                }
-	            	MethodInsnNode invoke = (MethodInsnNode) insn;
-	            	Map<String, String> renameMap = renamingMap.get(invoke.owner);
-	            	String rename = null;
-	            	if(renameMap != null) {
-	            		rename = renameMap.get(invoke.name);
-	            	}
-	            	if(rename != null) {
-	            		invoke.name = rename;
-	            	}
-	            }
+				for(AbstractInsnNode insn = method.instructions.getFirst(); insn != null ; insn = insn.getNext()) {
+					if(!(insn instanceof MethodInsnNode)) {
+						continue;
+					}
+					MethodInsnNode invoke = (MethodInsnNode) insn;
+					Map<String, String> renameMap = renamingMap.get(invoke.owner);
+					String rename = null;
+					if(renameMap != null) {
+						rename = renameMap.get(invoke.name);
+					}
+					if(rename != null) {
+						invoke.name = rename;
+					}
+				}
 			}
 		}
 	}
@@ -197,109 +197,109 @@ public class FixBridges implements Injection {
 	private List<MethodNode> visitedNodes = new ArrayList<>();
 	
 	private void fixOtherBridges(ClassNode node) {
-		ClassNode superClass = injector.getClass(node.superName);
-        if (superClass != null && !node.interfaces.isEmpty()) {
-        	superClass = injector.getClass(node.interfaces.get(0));
-        }
+		ClassNode superClass = storage.getClass(node.superName);
+		if (superClass != null && !node.interfaces.isEmpty()) {
+			superClass = storage.getClass(node.interfaces.get(0));
+		}
 		List<String> guessedGenerics = new ArrayList<>();
 		List<String> guessedGenericsSuper = new ArrayList<>();
 		Set<BridgePair> bridges = new HashSet<>();
 		nextMethod:
-        for (MethodNode method : node.methods) {
+		for (MethodNode method : node.methods) {
 			if (visitedNodes.contains(method)) {
-	            continue;
-	        }
-			if ((method.access & Opcodes.ACC_SYNTHETIC) == 0) {
-	            continue;
-	        }
-			if ((method.access & Opcodes.ACC_BRIDGE) == 0) {
-	            continue;
-	        }
-            AbstractInsnNode insn = method.instructions.getFirst();
-            while (insn instanceof LabelNode || insn instanceof LineNumberNode) {
-                insn = insn.getNext();
-            }
-            if (insn.getOpcode() != Opcodes.ALOAD) {
-            	continue;
-            }
-    		VarInsnNode aloadThis = (VarInsnNode) insn;
-            if (aloadThis.var != 0) {
-            	continue;
-            }
-            insn = insn.getNext();
-            for(Type type : Type.getArgumentTypes(method.desc)) {
-                if(type.getOpcode(Opcodes.ILOAD) != insn.getOpcode()) {
-                	continue nextMethod;
-                }
-                insn = insn.getNext();
-                if(insn.getOpcode() == Opcodes.CHECKCAST) {
-                	TypeInsnNode typeinsn = (TypeInsnNode)insn;
-                	String desc = "L" + typeinsn.desc + ";";
-                	if(!guessedGenerics.contains(desc)) {
-                		guessedGenerics.add(desc);
-                	}
-                	//TODO save method signature
-                	//Guess generics for superclass (it'll be corrected once it visits it's bridge methods)
-                	if(superClass != null && globalGuessedGenerics.get(superClass) == null) {
-	                	for(MethodNode m : superClass.methods) {
-	                		if (m.name.equals(method.name) && m.desc.equals(method.desc) && (m.access & Opcodes.ACC_BRIDGE) == 0) {
-	                        	if(!guessedGenericsSuper.contains(type.getDescriptor())) {
-	                        		guessedGenericsSuper.add(type.getDescriptor());
-	                        	}
-	                		}
-	                	}
-                	}
-                    insn = insn.getNext();
-                }
-            }
-        	if(insn.getOpcode() != Opcodes.INVOKEVIRTUAL) {
-        		continue;
-        	}
-        	MethodInsnNode invokevirtual = (MethodInsnNode) insn;
-            // Account for different return types
-            Type typeRet = Type.getReturnType(method.desc);
-            Type typeRet2 = Type.getReturnType(invokevirtual.desc);
-            if(typeRet.getSort() == Type.OBJECT && typeRet2.getSort() == Type.OBJECT && !typeRet.equals(typeRet2) &&
-            		!typeRet2.getInternalName().equals(node.name)) {
-	        	String desc = typeRet2.getDescriptor();
-	        	if(!guessedGenerics.contains(desc)) {
-	        		guessedGenerics.add(desc);
-	        	}
-            }
-            insn = insn.getNext();
-            Type retType = Type.getReturnType(method.desc);
-            if (retType.getOpcode(Opcodes.IRETURN) != insn.getOpcode()) {
-        		continue;
-            }
-            visitedNodes.add(method);
-            //Collect bridges
-            MethodNode renamedMethod = null;
-            for (MethodNode m : node.methods) {
-                if (m.name.equals(invokevirtual.name) && m.desc.equals(invokevirtual.desc)) {
-                	renamedMethod = m;
-                    break;
-                }
-            }
-            if(renamedMethod != null) {
-            	bridges.add(new BridgePair(node, method, renamedMethod));
-            }
-        }
-		if(!bridges.isEmpty()) {
-            globalGuessedGenerics.put(node, guessedGenerics);
-            if(superClass != null && !guessedGenericsSuper.isEmpty()) {
-            	globalGuessedGenerics.put(superClass, guessedGenericsSuper);
+				continue;
 			}
-			ClassNode supercl = injector.getClass(node.superName);
+			if ((method.access & Opcodes.ACC_SYNTHETIC) == 0) {
+				continue;
+			}
+			if ((method.access & Opcodes.ACC_BRIDGE) == 0) {
+				continue;
+			}
+			AbstractInsnNode insn = method.instructions.getFirst();
+			while (insn instanceof LabelNode || insn instanceof LineNumberNode) {
+				insn = insn.getNext();
+			}
+			if (insn.getOpcode() != Opcodes.ALOAD) {
+				continue;
+			}
+			VarInsnNode aloadThis = (VarInsnNode) insn;
+			if (aloadThis.var != 0) {
+				continue;
+			}
+			insn = insn.getNext();
+			for(Type type : Type.getArgumentTypes(method.desc)) {
+				if(type.getOpcode(Opcodes.ILOAD) != insn.getOpcode()) {
+					continue nextMethod;
+				}
+				insn = insn.getNext();
+				if(insn.getOpcode() == Opcodes.CHECKCAST) {
+					TypeInsnNode typeinsn = (TypeInsnNode)insn;
+					String desc = "L" + typeinsn.desc + ";";
+					if(!guessedGenerics.contains(desc)) {
+						guessedGenerics.add(desc);
+					}
+					//TODO save method signature
+					//Guess generics for superclass (it'll be corrected once it visits it's bridge methods)
+					if(superClass != null && globalGuessedGenerics.get(superClass) == null) {
+						for(MethodNode m : superClass.methods) {
+							if (m.name.equals(method.name) && m.desc.equals(method.desc) && (m.access & Opcodes.ACC_BRIDGE) == 0) {
+								if(!guessedGenericsSuper.contains(type.getDescriptor())) {
+									guessedGenericsSuper.add(type.getDescriptor());
+								}
+							}
+						}
+					}
+					insn = insn.getNext();
+				}
+			}
+			if(insn.getOpcode() != Opcodes.INVOKEVIRTUAL) {
+				continue;
+			}
+			MethodInsnNode invokevirtual = (MethodInsnNode) insn;
+			// Account for different return types
+			Type typeRet = Type.getReturnType(method.desc);
+			Type typeRet2 = Type.getReturnType(invokevirtual.desc);
+			if(typeRet.getSort() == Type.OBJECT && typeRet2.getSort() == Type.OBJECT && !typeRet.equals(typeRet2) &&
+					!typeRet2.getInternalName().equals(node.name)) {
+				String desc = typeRet2.getDescriptor();
+				if(!guessedGenerics.contains(desc)) {
+					guessedGenerics.add(desc);
+				}
+			}
+			insn = insn.getNext();
+			Type retType = Type.getReturnType(method.desc);
+			if (retType.getOpcode(Opcodes.IRETURN) != insn.getOpcode()) {
+				continue;
+			}
+			visitedNodes.add(method);
+			//Collect bridges
+			MethodNode renamedMethod = null;
+			for (MethodNode m : node.methods) {
+				if (m.name.equals(invokevirtual.name) && m.desc.equals(invokevirtual.desc)) {
+					renamedMethod = m;
+					break;
+				}
+			}
+			if(renamedMethod != null) {
+				bridges.add(new BridgePair(node, method, renamedMethod));
+			}
+		}
+		if(!bridges.isEmpty()) {
+			globalGuessedGenerics.put(node, guessedGenerics);
+			if(superClass != null && !guessedGenericsSuper.isEmpty()) {
+				globalGuessedGenerics.put(superClass, guessedGenericsSuper);
+			}
+			ClassNode supercl = storage.getClass(node.superName);
 			if(supercl != null) {
 				List<ClassNode> nodes = genericsTree.get(supercl);
-		        if(nodes != null) {
-		        	nodes.add(node);
-		        }
-		        else {
+				if(nodes != null) {
+					nodes.add(node);
+				}
+				else {
 					nodes = new ArrayList<>();
-		        	nodes.add(node);
-		        	genericsTree.put(supercl, nodes);
-		        }
+					nodes.add(node);
+					genericsTree.put(supercl, nodes);
+				}
 			}
 			else {
 				genericsTree.put(node, null);
@@ -326,79 +326,79 @@ public class FixBridges implements Injection {
 	 */
 	private boolean fixComparator(ClassNode node) {
 
-        if (node.interfaces.size() != 1) {
-            return false;
-        }
-        if (!node.interfaces.get(0).equals("java/util/Comparator")) {
-        	return false;
-        }
-        // Ljava/lang/Object;Ljava/util/Comparator<Lorg/junit/runner/Description;>;
-        for (MethodNode method : node.methods) {
-        	try {
+		if (node.interfaces.size() != 1) {
+			return false;
+		}
+		if (!node.interfaces.get(0).equals("java/util/Comparator")) {
+			return false;
+		}
+		// Ljava/lang/Object;Ljava/util/Comparator<Lorg/junit/runner/Description;>;
+		for (MethodNode method : node.methods) {
+			try {
 				if ((method.access & Opcodes.ACC_SYNTHETIC) == 0) {
-		            continue;
-		        }
+					continue;
+				}
 				if ((method.access & Opcodes.ACC_BRIDGE) == 0) {
-		            continue;
-		        }
-		        if (method.name.equals("compare") && method.desc.equals("(Ljava/lang/Object;Ljava/lang/Object;)I")) {
-//		        	if(node.signature != null && !node.signature.equals("Ljava/lang/Object;Ljava/util/Comparator<Ljava/lang/Object;>")) {
-//		        		node.methods.remove(method);
-//		        		return true;
-//		        	}
-		            AbstractInsnNode insn = method.instructions.getFirst();
-		            while (insn instanceof LabelNode || insn instanceof LineNumberNode) {
-		                insn = insn.getNext();
-		            }
-		            // List of expected instructions for compare's bridge
-		            int[] opcodes = {
-		            		Opcodes.ALOAD,
-		            		Opcodes.ALOAD,
-		            		Opcodes.CHECKCAST,
-		            		Opcodes.ALOAD,
-		            		Opcodes.CHECKCAST,
-		            		Opcodes.INVOKEVIRTUAL,
-		            		Opcodes.IRETURN
-		            		};
-		            MethodInsnNode invokevirtual = null;
-		            for(int i = 0; i < opcodes.length; i++) {
-		            	if(i != 0) {
-				            insn = insn.getNext();
-		            	}
-			            if (insn.getOpcode() != opcodes[i]) {
-			                throw new IllegalStateException("invalid bridge method: unexpected opcode");
-			            }
-		            	if(i == 0) {
-		            		VarInsnNode aloadThis = (VarInsnNode) insn;
-				            if (aloadThis.var != 0) {
-				                throw new IllegalStateException("invalid bridge method: unexpected variable loaded");
-				            }
-		            	}
-		            	if(insn.getOpcode() == Opcodes.INVOKEVIRTUAL) {
-				            invokevirtual = (MethodInsnNode) insn;
-		            	}
-		            }
-		            for (MethodNode m : node.methods) {
-		                if (m.name.equals(invokevirtual.name) && m.desc.equals(invokevirtual.desc)) {
-		                	//Rename called method
-		                	renamingMap.put(node.name, Collections.singletonMap(m.name, method.name));
-		                    m.name = method.name;
-		                    break;
-		                }
-		            }
-		            //Add generics
-		            String generics = invokevirtual.desc.substring(1, invokevirtual.desc.indexOf(';'));
-		            node.signature = "Ljava/lang/Object;Ljava/util/Comparator<" + generics + ";>;";
-		            //Remove bridge
-                    node.methods.remove(method);
-		            return true;
-		        }
-        	} catch (IllegalStateException e) {
-        		// Not a bridge
-	            method.access &= ~Opcodes.ACC_BRIDGE;
-        	}
-	    }
-        return false;
+					continue;
+				}
+				if (method.name.equals("compare") && method.desc.equals("(Ljava/lang/Object;Ljava/lang/Object;)I")) {
+//					if(node.signature != null && !node.signature.equals("Ljava/lang/Object;Ljava/util/Comparator<Ljava/lang/Object;>")) {
+//						node.methods.remove(method);
+//						return true;
+//					}
+					AbstractInsnNode insn = method.instructions.getFirst();
+					while (insn instanceof LabelNode || insn instanceof LineNumberNode) {
+						insn = insn.getNext();
+					}
+					// List of expected instructions for compare's bridge
+					int[] opcodes = {
+							Opcodes.ALOAD,
+							Opcodes.ALOAD,
+							Opcodes.CHECKCAST,
+							Opcodes.ALOAD,
+							Opcodes.CHECKCAST,
+							Opcodes.INVOKEVIRTUAL,
+							Opcodes.IRETURN
+							};
+					MethodInsnNode invokevirtual = null;
+					for(int i = 0; i < opcodes.length; i++) {
+						if(i != 0) {
+							insn = insn.getNext();
+						}
+						if (insn.getOpcode() != opcodes[i]) {
+							throw new IllegalStateException("invalid bridge method: unexpected opcode");
+						}
+						if(i == 0) {
+							VarInsnNode aloadThis = (VarInsnNode) insn;
+							if (aloadThis.var != 0) {
+								throw new IllegalStateException("invalid bridge method: unexpected variable loaded");
+							}
+						}
+						if(insn.getOpcode() == Opcodes.INVOKEVIRTUAL) {
+							invokevirtual = (MethodInsnNode) insn;
+						}
+					}
+					for (MethodNode m : node.methods) {
+						if (m.name.equals(invokevirtual.name) && m.desc.equals(invokevirtual.desc)) {
+							//Rename called method
+							renamingMap.put(node.name, Collections.singletonMap(m.name, method.name));
+							m.name = method.name;
+							break;
+						}
+					}
+					//Add generics
+					String generics = invokevirtual.desc.substring(1, invokevirtual.desc.indexOf(';'));
+					node.signature = "Ljava/lang/Object;Ljava/util/Comparator<" + generics + ";>;";
+					//Remove bridge
+					node.methods.remove(method);
+					return true;
+				}
+			} catch (IllegalStateException e) {
+				// Not a bridge
+				method.access &= ~Opcodes.ACC_BRIDGE;
+			}
+		}
+		return false;
 	}
 
 }

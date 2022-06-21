@@ -1,7 +1,7 @@
 package org.mcphackers.rdi.injector.visitors;
 
-import org.mcphackers.rdi.injector.Access;
-import org.mcphackers.rdi.injector.Access.Level;
+import org.mcphackers.rdi.injector.data.Access;
+import org.mcphackers.rdi.injector.data.Access.Level;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;

@@ -40,31 +40,31 @@ public abstract class ClassVisitor {
 	
 	protected void visitClass(ClassNode node) {
 		if (cv != null) {
-	      cv.visitClass(node);
-	    }
+		  cv.visitClass(node);
+		}
 	}
 
 	protected void visitInner(InnerClassNode node) {
 		if (cv != null) {
-	      cv.visitInner(node);
-	    }
+		  cv.visitInner(node);
+		}
 	}
 
 	protected void visitMethod(MethodNode node) {
 		if (cv != null) {
-	      cv.visitMethod(node);
-	    }
+		  cv.visitMethod(node);
+		}
 	}
 
 	protected void visitField(FieldNode node) {
 		if (cv != null) {
-	      cv.visitField(node);
-	    }
+		  cv.visitField(node);
+		}
 	}
 	
 	protected void visitEnd(ClassNode node) {
 		if (cv != null) {
-	      cv.visitEnd(node);
-	    }
+		  cv.visitEnd(node);
+		}
 	}
 }

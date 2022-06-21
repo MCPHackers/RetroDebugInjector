@@ -1,18 +1,12 @@
 package org.mcphackers.rdi.injector;
 
-import java.util.List;
-
-import org.objectweb.asm.tree.ClassNode;
+import org.mcphackers.rdi.injector.data.ClassStorage;
 
 public interface Injector {
 	
-	void setClasses(List<ClassNode> nodes);
-
-	void addClass(ClassNode node);
-
-	List<ClassNode> getClasses();
+	void setStorage(ClassStorage storage);
 	
-	ClassNode getClass(String className);
+	ClassStorage getStorage();
 	
 	void transform();
 }

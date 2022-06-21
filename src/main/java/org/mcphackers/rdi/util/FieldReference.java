@@ -13,67 +13,67 @@ import org.objectweb.asm.tree.FieldNode;
  */
 public final class FieldReference {
 
-    private final String desc;
-    private final String name;
-    private final String owner;
+	private final String desc;
+	private final String name;
+	private final String owner;
 
-    public FieldReference(FieldInsnNode instruction) {
-        this(instruction.owner, instruction.desc, instruction.name);
-    }
+	public FieldReference(FieldInsnNode instruction) {
+		this(instruction.owner, instruction.desc, instruction.name);
+	}
 
-    public FieldReference(String owner, FieldNode node) {
-        this(owner, node.desc, node.name);
-    }
+	public FieldReference(String owner, FieldNode node) {
+		this(owner, node.desc, node.name);
+	}
 
-    public FieldReference(String owner, String desc, String name) {
-        this.owner = owner;
-        this.name = name;
-        this.desc = desc;
-    }
+	public FieldReference(String owner, String desc, String name) {
+		this.owner = owner;
+		this.name = name;
+		this.desc = desc;
+	}
 
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == this) {
-            return true;
-        }
-        if (!(obj instanceof FieldReference)) {
-            return false;
-        }
-        FieldReference other = (FieldReference) obj;
-        return other.name.equals(this.name) && other.desc.equals(this.desc) && other.owner.equals(this.owner);
-    }
+	@Override
+	public boolean equals(Object obj) {
+		if (obj == this) {
+			return true;
+		}
+		if (!(obj instanceof FieldReference)) {
+			return false;
+		}
+		FieldReference other = (FieldReference) obj;
+		return other.name.equals(this.name) && other.desc.equals(this.desc) && other.owner.equals(this.owner);
+	}
 
-    public String getName() {
-        return name;
-    }
+	public String getName() {
+		return name;
+	}
 
-    /**
-     * Obtains the simple internal name of the owner.
-     * This means it will be like this: "org/example/ClassName"
-     *
-     * @return The simple internal name of the owner
-     */
-    public String getOwner() {
-        return owner;
-    }
+	/**
+	 * Obtains the simple internal name of the owner.
+	 * This means it will be like this: "org/example/ClassName"
+	 *
+	 * @return The simple internal name of the owner
+	 */
+	public String getOwner() {
+		return owner;
+	}
 
-    /**
-     * Obtains the field descriptor of the referred field
-     *
-     * @return The field descriptor
-     */
-    public String getDesc() {
-        return desc;
-    }
+	/**
+	 * Obtains the field descriptor of the referred field
+	 *
+	 * @return The field descriptor
+	 */
+	public String getDesc() {
+		return desc;
+	}
 
-    @Override
-    public int hashCode() {
-//        return (owner.hashCode() & 0xFFFF0000 | name.hashCode() & 0x0000FFFF) ^ desc.hashCode();
-        return Objects.hash(owner, name, desc);
-    }
+	@Override
+	public int hashCode() {
+//		return (owner.hashCode() & 0xFFFF0000 | name.hashCode() & 0x0000FFFF) ^ desc.hashCode();
+		return Objects.hash(owner, name, desc);
+	}
 
-    @Override
-    public String toString() {
-        return String.format(Locale.ROOT, "FieldReference[owner=\"%s\",name=\"%s\",desc=\"%s\"]", this.owner, this.name, this.desc);
-    }
+	@Override
+	public String toString() {
+		return String.format(Locale.ROOT, "FieldReference[owner=\"%s\",name=\"%s\",desc=\"%s\"]", this.owner, this.name, this.desc);
+	}
 }
