@@ -40,11 +40,11 @@ public class AddGenerics implements Injection {
 				}
 			}
 		}
-		for (ClassNode node : storage.getClasses()) {
-			for(MethodNode method : node.methods) {
-				
-			}
-		}
+//		for (ClassNode node : storage.getClasses()) {
+//			for(MethodNode method : node.methods) {
+//				
+//			}
+//		}
 	}
 	
 	private boolean isList(String desc) {

@@ -5,7 +5,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.mcphackers.rdi.util.FieldReference;
+import org.mcphackers.rdi.util.MethodReference;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.MethodNode;
 
 public class ClassStorage {
 	
@@ -23,6 +27,30 @@ public class ClassStorage {
 	
 	public ClassNode getClass(String name) {
 		return cachedNodes.get(name);
+	}
+	
+	public FieldNode getField(FieldReference ref) {
+		ClassNode node = getClass(ref.getOwner());
+		if(node != null) {
+			for(FieldNode field : node.fields) {
+				if(field.name.equals(ref.getName()) && field.desc.equals(ref.getDesc())) {
+					return field;
+				}
+			}
+		}
+		return null;
+	}
+	
+	public MethodNode getMethod(MethodReference ref) {
+		ClassNode node = getClass(ref.getOwner());
+		if(node != null) {
+			for(MethodNode method : node.methods) {
+				if(method.name.equals(ref.getName()) && method.desc.equals(ref.getDesc())) {
+					return method;
+				}
+			}
+		}
+		return null;
 	}
 	
 	public void addClass(ClassNode node) {
@@ -46,6 +74,27 @@ public class ClassStorage {
 		for(ClassNode node : nodes) {
 			cachedNodes.put(node.name, node);
 		}
+	}
+	
+	public static boolean inOnePackage(ClassNode node, ClassNode node2) {
+		return inOnePackage(node.name, node2.name);
+	}
+	
+	public static boolean inOnePackage(String node, String node2) {
+        int lastIndexOfSlash = node.lastIndexOf('/');
+        int lastIndexOfSlash2 = node2.lastIndexOf('/');
+        if(lastIndexOfSlash != lastIndexOfSlash2) {
+        	return false;
+        }
+        if(lastIndexOfSlash == -1 && lastIndexOfSlash2 == -1) {
+        	return true;
+        }
+        String packageName = node.substring(0, lastIndexOfSlash);
+        String packageName2 = node2.substring(0, lastIndexOfSlash2);
+        if (packageName.equals(packageName2)) {
+			return true;
+        }
+        return false;
 	}
 	
 }

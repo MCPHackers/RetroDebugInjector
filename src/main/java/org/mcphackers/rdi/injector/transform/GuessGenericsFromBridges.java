@@ -23,9 +23,8 @@ import org.objectweb.asm.tree.VarInsnNode;
 
 /**
  * This class is a nightmare and really scares me, you too probably
- *
  */
-public class FixBridges implements Injection {
+public class GuessGenericsFromBridges implements Injection {
 	
 	private ClassStorage storage;
 
@@ -47,7 +46,7 @@ public class FixBridges implements Injection {
 		
 	}
 
-	public FixBridges(ClassStorage storage) {
+	public GuessGenericsFromBridges(ClassStorage storage) {
 		this.storage = storage;
 	}
 	
@@ -66,7 +65,7 @@ public class FixBridges implements Injection {
 				}
 				methodRenames.put(pair.renamedMethod.name, rename);
 				pair.renamedMethod.name = rename;
-				node.methods.remove(pair.removedMethod);
+				//node.methods.remove(pair.removedMethod);
 			}
 		}
 		renamingMap.put(node.name, methodRenames);
@@ -389,8 +388,8 @@ public class FixBridges implements Injection {
 					//Add generics
 					String generics = invokevirtual.desc.substring(1, invokevirtual.desc.indexOf(';'));
 					node.signature = "Ljava/lang/Object;Ljava/util/Comparator<" + generics + ";>;";
-					//Remove bridge
-					node.methods.remove(method);
+					//TODO remove bridge in the decompiler instead of removing in bytecode
+					//node.methods.remove(method);
 					return true;
 				}
 			} catch (IllegalStateException e) {

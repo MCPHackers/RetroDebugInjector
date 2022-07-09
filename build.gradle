@@ -10,12 +10,14 @@ targetCompatibility = JavaVersion.VERSION_1_8
 
 repositories {
 	mavenCentral()
+    maven { url 'https://maven.fabricmc.net/' }
 }
 
 dependencies {
 	// Dependencies
 	implementation "org.ow2.asm:asm:${project.asm_version}"
 	implementation "org.ow2.asm:asm-tree:${project.asm_version}"
+    implementation "net.fabricmc:mapping-io:${project.mapping_io_version}"
 
 	// Testing frameworks
 	testImplementation "org.junit.jupiter:junit-jupiter-api:${project.junit_version}"

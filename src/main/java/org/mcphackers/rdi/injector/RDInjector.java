@@ -8,8 +8,10 @@ import org.mcphackers.rdi.injector.data.Access;
 import org.mcphackers.rdi.injector.data.ClassStorage;
 import org.mcphackers.rdi.injector.data.Exceptions;
 import org.mcphackers.rdi.injector.data.Generics;
+import org.mcphackers.rdi.injector.data.Mappings;
+import org.mcphackers.rdi.injector.remapper.Remapper;
 import org.mcphackers.rdi.injector.transform.AddGenerics;
-import org.mcphackers.rdi.injector.transform.FixBridges;
+import org.mcphackers.rdi.injector.transform.GuessGenericsFromBridges;
 import org.mcphackers.rdi.injector.transform.Injection;
 import org.mcphackers.rdi.injector.transform.Transform;
 import org.mcphackers.rdi.injector.visitors.AccessFixer;
@@ -21,6 +23,9 @@ import org.mcphackers.rdi.util.IOUtil;
 import org.objectweb.asm.tree.ClassNode;
 
 public class RDInjector implements Injector {
+	
+	public RDInjector() {
+	}
 	
 	public RDInjector(Path path) {
 		setStorage(new ClassStorage(IOUtil.read(path)));
@@ -53,6 +58,18 @@ public class RDInjector implements Injector {
 		if(visitorStack != null) {
 			visitorStack.visit(storage.getClasses());
 		}
+		globalTransform.clear();
+		visitorStack = null;
+	}
+	
+	public RDInjector applyMappings(Mappings mappings) {
+		globalTransform.add(() -> new Remapper().load(storage).load(mappings).process());
+		return this;
+	}
+	
+	public RDInjector applyMappings(Path path, String srcNamespace, String targetNamespace) {
+		Mappings mappings = Mappings.read(path, srcNamespace, targetNamespace);
+		return applyMappings(mappings);
 	}
 	
 	public RDInjector fixInnerClasses() {
@@ -60,6 +77,17 @@ public class RDInjector implements Injector {
 		return this;
 	}
 	
+	public RDInjector fixAccess() {
+		globalTransform.add(() -> Transform.fixAccess(storage));
+		return this;
+	}
+	
+	public RDInjector stripLVT() {
+		globalTransform.add(() -> Transform.stripLVT(storage));
+		return this;
+	}
+	
+	@Deprecated
 	public RDInjector fixSwitchMaps() {
 		globalTransform.add(() -> Transform.fixSwitchMaps(storage));
 		return this;
@@ -87,8 +115,8 @@ public class RDInjector implements Injector {
 		return this;
 	}
 	
-	public RDInjector fixBridges() {
-		globalTransform.add(new FixBridges(storage));
+	public RDInjector guessGenerics() {
+		globalTransform.add(new GuessGenericsFromBridges(storage));
 		return this;
 	}
 	

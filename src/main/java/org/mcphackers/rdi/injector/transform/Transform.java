@@ -2,6 +2,7 @@ package org.mcphackers.rdi.injector.transform;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -10,12 +11,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.mcphackers.rdi.injector.data.Access.Level;
 import org.mcphackers.rdi.injector.data.ClassStorage;
 import org.mcphackers.rdi.injector.data.Constants;
 import org.mcphackers.rdi.util.DescString;
 import org.mcphackers.rdi.util.FieldReference;
 import org.mcphackers.rdi.util.MethodReference;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -25,6 +28,7 @@ import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 
 /**
  * Class with global transformations to the list of classes
@@ -230,6 +234,7 @@ public final class Transform {
 	 *
 	 * @return The amount of classes who were identified as switch maps.
 	 */
+	//FIXME SyntheticClass1 ???
 	public static int fixSwitchMaps(ClassStorage storage) {
 		Map<FieldReference, String> deobfNames = new HashMap<>(); // The deobf name will be something like $SwitchMap$org$bukkit$Material
 
@@ -437,7 +442,7 @@ public final class Transform {
 							} else {
 								Map.Entry<String, MethodNode> invoker = candidates.get(owner);
 								if (invoker == null) {
-									candidates.put(owner, new AbstractMap.SimpleEntry(node.name, method));
+									candidates.put(owner, new AbstractMap.SimpleEntry<String, MethodNode>(node.name, method));
 								} else if (!invoker.getKey().equals(node.name)
 										|| !invoker.getValue().name.equals(method.name)
 										|| !invoker.getValue().desc.equals(method.desc)) {
@@ -522,13 +527,138 @@ public final class Transform {
 
 		return addedInners;
 	}
+	
+	public static void fixAccess(ClassStorage storage) {
+		for(ClassNode node : storage.getClasses()) {
+			for(FieldNode field : node.fields) {
+				Type type = Type.getType(field.desc);
+				if(type.getSort() == Type.OBJECT) {
+					ClassNode classNode = storage.getClass(type.getInternalName());
+					if(classNode != null) {
+						Level access = Level.getFromBytecode(classNode.access);
+						if(access == Level.DEFAULT) {
+	                    	if(!ClassStorage.inOnePackage(node.name, type.getInternalName())) {
+	                    		classNode.access = Level.PUBLIC.setAccess(classNode.access);
+	                    	}
+						}
+					}
+				}
+			}
+			for(MethodNode method : node.methods) {
+				//TODO optimize
+				//TODO collect references first, then change access
+				List<Type> types = new ArrayList<>();
+				types.addAll(Arrays.asList(Type.getArgumentTypes(method.desc)));
+				types.add(Type.getReturnType(method.desc));
+				for(Type type : types) {
+					if(type.getSort() == Type.OBJECT) {
+						ClassNode classNode = storage.getClass(type.getInternalName());
+						if(classNode != null) {
+							Level access = Level.getFromBytecode(classNode.access);
+							if(access == Level.DEFAULT) {
+		                    	if(!ClassStorage.inOnePackage(node.name, type.getInternalName())) {
+		                    		classNode.access = Level.PUBLIC.setAccess(classNode.access);
+		                    	}
+							}
+						}
+					}
+				}
+				for(AbstractInsnNode insn : method.instructions) {
+					if(insn instanceof MethodInsnNode) {
+						MethodInsnNode invoke = (MethodInsnNode)insn;
+						MethodNode methodNode = storage.getMethod(new MethodReference(invoke));
+						if(methodNode == null) {
+							continue;
+						}
+						ClassNode classNode = storage.getClass(invoke.owner);
+						if(classNode != null) {
+							Level access = Level.getFromBytecode(classNode.access);
+							if(access == Level.DEFAULT) {
+		                    	if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
+		                    		classNode.access = Level.PUBLIC.setAccess(classNode.access);
+		                    	}
+							}
+						}
+						Level accessLevel = Level.getFromBytecode(methodNode.access);
+						if (accessLevel == Level.PUBLIC) {
+							continue;
+						}
+						if(accessLevel == Level.PROTECTED) {
+							continue;
+						}
+						if(accessLevel == Level.PRIVATE) {
+							if(!node.name.equals(invoke.owner)) {
+								methodNode.access = Level.PUBLIC.setAccess(methodNode.access);
+							}
+							continue;
+						}
+						if(accessLevel == Level.DEFAULT) {
+	                    	if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
+								methodNode.access = Level.PUBLIC.setAccess(methodNode.access);
+	                    	}
+							continue;
+						}
+					}
+					if(insn instanceof FieldInsnNode) {
+						FieldInsnNode field = (FieldInsnNode)insn;
+						FieldNode fieldNode = storage.getField(new FieldReference(field));
+						if(fieldNode == null) {
+							continue;
+						}
+						ClassNode classNode = storage.getClass(field.owner);
+						if(classNode != null) {
+							Level access = Level.getFromBytecode(classNode.access);
+							if(access == Level.DEFAULT) {
+		                    	if(!ClassStorage.inOnePackage(node.name, field.owner)) {
+		                    		classNode.access = Level.PUBLIC.setAccess(classNode.access);
+		                    	}
+							}
+						}
+						Level accessLevel = Level.getFromBytecode(fieldNode.access);
+						if (accessLevel == Level.PUBLIC) {
+							continue;
+						}
+						if(accessLevel == Level.PROTECTED) {
+							continue;
+						}
+						if(accessLevel == Level.PRIVATE) {
+							if(!node.name.equals(field.owner)) {
+								fieldNode.access = Level.PUBLIC.setAccess(fieldNode.access);
+							}
+							continue;
+						}
+						if(accessLevel == Level.DEFAULT) {
+	                    	if(!ClassStorage.inOnePackage(node.name, field.owner)) {
+	                    		fieldNode.access = Level.PUBLIC.setAccess(fieldNode.access);
+	                    	}
+							continue;
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Clears local variable table for every method in each class
+	 * @param storage
+	 */
+	public static void stripLVT(ClassStorage storage) {
+		for(ClassNode node : storage.getClasses()) {
+			for(MethodNode method : node.methods) {
+				if(method.localVariables != null) {
+					method.localVariables.clear();
+				}
+			}
+		}
+	}
 
-	//TODO Preserve order
 	/**
 	 * Adds all missing methods and fields from storage2 to storage
 	 * @param storage
 	 * @param storage2
 	 */
+	//TODO Preserve order
 	public static void merge(ClassStorage storage, ClassStorage storage2) {
 		for(ClassNode node2 : storage2.getClasses()) {
 			ClassNode node1 = storage.getClass(node2.name);

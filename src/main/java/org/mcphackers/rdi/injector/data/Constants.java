@@ -69,6 +69,7 @@ public class Constants {
 		}
 	};
 	public static final Set<String> LISTS = new HashSet<String>() {
+		private static final long serialVersionUID = -3779578266088390364L;
 		
 		{
 			add("Ljava/util/List;");
