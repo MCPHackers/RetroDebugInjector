@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.mcphackers.rdi.injector.data.Access.Level;
@@ -17,6 +18,7 @@ import org.mcphackers.rdi.injector.data.Constants;
 import org.mcphackers.rdi.util.DescString;
 import org.mcphackers.rdi.util.FieldReference;
 import org.mcphackers.rdi.util.MethodReference;
+import org.mcphackers.rdi.util.Pair;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -28,7 +30,6 @@ import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.VarInsnNode;
 
 /**
  * Class with global transformations to the list of classes
@@ -528,114 +529,188 @@ public final class Transform {
 		return addedInners;
 	}
 	
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public static void fixAccess(ClassStorage storage) {
+		Map<String, Level> classAccesses = new HashMap<>();
+		Map<FieldReference, Pair<FieldNode, Level>> fieldAccesses = new HashMap<>();
+		Map<MethodReference, Pair<MethodNode, Level>> methodAccesses = new HashMap<>();
+		
+		// Find all invalid access points
+		
 		for(ClassNode node : storage.getClasses()) {
 			for(FieldNode field : node.fields) {
+				// Checking field type
 				Type type = Type.getType(field.desc);
-				if(type.getSort() == Type.OBJECT) {
-					ClassNode classNode = storage.getClass(type.getInternalName());
-					if(classNode != null) {
-						Level access = Level.getFromBytecode(classNode.access);
-						if(access == Level.DEFAULT) {
-	                    	if(!ClassStorage.inOnePackage(node.name, type.getInternalName())) {
-	                    		classNode.access = Level.PUBLIC.setAccess(classNode.access);
-	                    	}
-						}
-					}
+				if(type.getSort() != Type.OBJECT) {
+					continue;
+				}
+				ClassNode classNode = storage.getClass(type.getInternalName());
+				if(classNode == null) {
+					continue;
+				}
+				Level access = Level.getFromBytecode(classNode.access);
+				if(access == Level.DEFAULT) {
+                	if(!ClassStorage.inOnePackage(node.name, classNode.name)) {
+                		classAccesses.put(classNode.name, Level.PUBLIC);
+                	}
 				}
 			}
 			for(MethodNode method : node.methods) {
-				//TODO optimize
-				//TODO collect references first, then change access
+				// Checking method argument and return types
 				List<Type> types = new ArrayList<>();
 				types.addAll(Arrays.asList(Type.getArgumentTypes(method.desc)));
 				types.add(Type.getReturnType(method.desc));
 				for(Type type : types) {
-					if(type.getSort() == Type.OBJECT) {
-						ClassNode classNode = storage.getClass(type.getInternalName());
-						if(classNode != null) {
-							Level access = Level.getFromBytecode(classNode.access);
-							if(access == Level.DEFAULT) {
-		                    	if(!ClassStorage.inOnePackage(node.name, type.getInternalName())) {
-		                    		classNode.access = Level.PUBLIC.setAccess(classNode.access);
-		                    	}
-							}
-						}
+					if(type.getSort() != Type.OBJECT) {
+						continue;
+					}
+					if(classAccesses.containsKey(type.getInternalName())) {
+						continue;
+					}
+					ClassNode classNode = storage.getClass(type.getInternalName());
+					if(classNode == null) {
+						continue;
+					}
+					Level access = Level.getFromBytecode(classNode.access);
+					if(access == Level.DEFAULT) {
+                    	if(!ClassStorage.inOnePackage(node.name, type.getInternalName())) {
+                    		classAccesses.put(classNode.name, Level.PUBLIC);
+                    	}
 					}
 				}
 				for(AbstractInsnNode insn : method.instructions) {
 					if(insn instanceof MethodInsnNode) {
 						MethodInsnNode invoke = (MethodInsnNode)insn;
-						MethodNode methodNode = storage.getMethod(new MethodReference(invoke));
+						MethodReference ref = new MethodReference(invoke);
+						MethodNode methodNode = storage.getMethod(ref);
 						if(methodNode == null) {
 							continue;
 						}
-						ClassNode classNode = storage.getClass(invoke.owner);
-						if(classNode != null) {
-							Level access = Level.getFromBytecode(classNode.access);
-							if(access == Level.DEFAULT) {
-		                    	if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
-		                    		classNode.access = Level.PUBLIC.setAccess(classNode.access);
-		                    	}
+						if(!classAccesses.containsKey(invoke.owner)) {
+							ClassNode classNode = storage.getClass(invoke.owner);
+							if(classNode != null) {
+								Level access = Level.getFromBytecode(classNode.access);
+								if(access == Level.DEFAULT) {
+			                    	if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
+			                    		classAccesses.put(classNode.name, Level.PUBLIC);
+			                    	}
+								}
 							}
+						}
+						if(methodAccesses.containsKey(ref)) {
+							continue;
 						}
 						Level accessLevel = Level.getFromBytecode(methodNode.access);
 						if (accessLevel == Level.PUBLIC) {
 							continue;
 						}
-						if(accessLevel == Level.PROTECTED) {
-							continue;
-						}
 						if(accessLevel == Level.PRIVATE) {
 							if(!node.name.equals(invoke.owner)) {
-								methodNode.access = Level.PUBLIC.setAccess(methodNode.access);
+								methodAccesses.put(ref, new Pair(methodNode, Level.PUBLIC));
 							}
 							continue;
 						}
-						if(accessLevel == Level.DEFAULT) {
+						if(accessLevel == Level.DEFAULT || accessLevel == Level.PROTECTED) {
+							if(accessLevel == Level.PROTECTED) {
+								boolean isSuper = false;
+								for(ClassNode clNode = node; clNode != null; clNode = storage.getClass(clNode.superName)) {
+									if(clNode.name.equals(invoke.owner)) {
+										isSuper = true;
+									}
+								}
+								if(isSuper) continue;
+							}
 	                    	if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
-								methodNode.access = Level.PUBLIC.setAccess(methodNode.access);
+								methodAccesses.put(ref, new Pair(methodNode, Level.PUBLIC));
 	                    	}
 							continue;
 						}
 					}
+
 					if(insn instanceof FieldInsnNode) {
 						FieldInsnNode field = (FieldInsnNode)insn;
-						FieldNode fieldNode = storage.getField(new FieldReference(field));
+						FieldReference ref = new FieldReference(field);
+						FieldNode fieldNode = storage.getField(ref);
 						if(fieldNode == null) {
 							continue;
 						}
-						ClassNode classNode = storage.getClass(field.owner);
-						if(classNode != null) {
-							Level access = Level.getFromBytecode(classNode.access);
-							if(access == Level.DEFAULT) {
-		                    	if(!ClassStorage.inOnePackage(node.name, field.owner)) {
-		                    		classNode.access = Level.PUBLIC.setAccess(classNode.access);
-		                    	}
+						if(!classAccesses.containsKey(field.owner)) {
+							ClassNode classNode = storage.getClass(field.owner);
+							if(classNode != null) {
+								Level access = Level.getFromBytecode(classNode.access);
+								if(access == Level.DEFAULT) {
+			                    	if(!ClassStorage.inOnePackage(node.name, field.owner)) {
+			                    		classAccesses.put(classNode.name, Level.PUBLIC);
+			                    	}
+								}
 							}
+						}
+						if(fieldAccesses.containsKey(ref)) {
+							continue;
 						}
 						Level accessLevel = Level.getFromBytecode(fieldNode.access);
 						if (accessLevel == Level.PUBLIC) {
 							continue;
 						}
-						if(accessLevel == Level.PROTECTED) {
-							continue;
-						}
 						if(accessLevel == Level.PRIVATE) {
 							if(!node.name.equals(field.owner)) {
-								fieldNode.access = Level.PUBLIC.setAccess(fieldNode.access);
+	                    		fieldAccesses.put(ref, new Pair(fieldNode, Level.PUBLIC));
 							}
 							continue;
 						}
-						if(accessLevel == Level.DEFAULT) {
+						if(accessLevel == Level.DEFAULT || accessLevel == Level.PROTECTED) {
+							if(accessLevel == Level.PROTECTED) {
+								boolean isSuper = false;
+								for(ClassNode clNode = node; clNode != null; clNode = storage.getClass(clNode.superName)) {
+									if(clNode.name.equals(field.owner)) {
+										isSuper = true;
+									}
+								}
+								if(isSuper) continue;
+							}
 	                    	if(!ClassStorage.inOnePackage(node.name, field.owner)) {
-	                    		fieldNode.access = Level.PUBLIC.setAccess(fieldNode.access);
+								fieldAccesses.put(ref, new Pair(fieldNode, Level.PUBLIC));
 	                    	}
 							continue;
 						}
 					}
 				}
 			}
+		}
+		
+		// Apply all access modifiers
+		
+		for(Entry<String, Level> entry : classAccesses.entrySet()) {
+			ClassNode node = storage.getClass(entry.getKey());
+
+			if(node == null) {
+				continue;
+			}
+			Level level = entry.getValue();
+			
+			node.access = level.setAccess(node.access);
+		}
+
+		for(Entry<FieldReference, Pair<FieldNode, Level>> entry : fieldAccesses.entrySet()) {
+			Pair<FieldNode, Level> pair = entry.getValue();
+			if(pair == null) {
+				continue;
+			}
+			FieldNode node = pair.getLeft();
+			Level level = pair.getRight();
+
+			node.access = level.setAccess(node.access);
+		}
+		
+		for(Entry<MethodReference, Pair<MethodNode, Level>> entry : methodAccesses.entrySet()) {
+			Pair<MethodNode, Level> pair = entry.getValue();
+			if(pair == null) {
+				continue;
+			}
+			MethodNode node = pair.getLeft();
+			Level level = pair.getRight();
+			
+			node.access = level.setAccess(node.access);
 		}
 	}
 	

@@ -10,7 +10,7 @@ import java.util.Map;
 import org.mcphackers.rdi.injector.remapper.FieldRenameMap;
 import org.mcphackers.rdi.injector.remapper.MethodRenameMap;
 
-import net.fabricmc.mappingio.format.Tiny1Reader;
+import net.fabricmc.mappingio.format.Tiny2Reader;
 import net.fabricmc.mappingio.tree.MappingTree.ClassMapping;
 import net.fabricmc.mappingio.tree.MappingTree.FieldMapping;
 import net.fabricmc.mappingio.tree.MappingTree.MethodMapping;
@@ -32,7 +32,8 @@ public class Mappings {
 		Mappings mappings = new Mappings();
 		try(BufferedReader br = Files.newBufferedReader(path)) {
 			MemoryMappingTree mappingTree = new MemoryMappingTree();
-			Tiny1Reader.read(br, mappingTree);
+			//TODO custom reader
+			Tiny2Reader.read(br, mappingTree);
 			for(ClassMapping classMapping : mappingTree.getClasses()) {
 				String className = classMapping.getName(srcNamespace);
 				if(className == null) {
