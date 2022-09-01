@@ -529,7 +529,6 @@ public final class Transform {
 		return addedInners;
 	}
 	
-	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public static void fixAccess(ClassStorage storage) {
 		Map<String, Level> classAccesses = new HashMap<>();
 		Map<FieldReference, Pair<FieldNode, Level>> fieldAccesses = new HashMap<>();
@@ -550,9 +549,9 @@ public final class Transform {
 				}
 				Level access = Level.getFromBytecode(classNode.access);
 				if(access == Level.DEFAULT) {
-                	if(!ClassStorage.inOnePackage(node.name, classNode.name)) {
-                		classAccesses.put(classNode.name, Level.PUBLIC);
-                	}
+					if(!ClassStorage.inOnePackage(node.name, classNode.name)) {
+						classAccesses.put(classNode.name, Level.PUBLIC);
+					}
 				}
 			}
 			for(MethodNode method : node.methods) {
@@ -573,9 +572,9 @@ public final class Transform {
 					}
 					Level access = Level.getFromBytecode(classNode.access);
 					if(access == Level.DEFAULT) {
-                    	if(!ClassStorage.inOnePackage(node.name, type.getInternalName())) {
-                    		classAccesses.put(classNode.name, Level.PUBLIC);
-                    	}
+						if(!ClassStorage.inOnePackage(node.name, type.getInternalName())) {
+							classAccesses.put(classNode.name, Level.PUBLIC);
+						}
 					}
 				}
 				for(AbstractInsnNode insn : method.instructions) {
@@ -591,9 +590,9 @@ public final class Transform {
 							if(classNode != null) {
 								Level access = Level.getFromBytecode(classNode.access);
 								if(access == Level.DEFAULT) {
-			                    	if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
-			                    		classAccesses.put(classNode.name, Level.PUBLIC);
-			                    	}
+									if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
+										classAccesses.put(classNode.name, Level.PUBLIC);
+									}
 								}
 							}
 						}
@@ -606,7 +605,7 @@ public final class Transform {
 						}
 						if(accessLevel == Level.PRIVATE) {
 							if(!node.name.equals(invoke.owner)) {
-								methodAccesses.put(ref, new Pair(methodNode, Level.PUBLIC));
+								methodAccesses.put(ref, new Pair<>(methodNode, Level.PUBLIC));
 							}
 							continue;
 						}
@@ -620,9 +619,9 @@ public final class Transform {
 								}
 								if(isSuper) continue;
 							}
-	                    	if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
-								methodAccesses.put(ref, new Pair(methodNode, Level.PUBLIC));
-	                    	}
+							if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
+								methodAccesses.put(ref, new Pair<>(methodNode, Level.PUBLIC));
+							}
 							continue;
 						}
 					}
@@ -639,9 +638,9 @@ public final class Transform {
 							if(classNode != null) {
 								Level access = Level.getFromBytecode(classNode.access);
 								if(access == Level.DEFAULT) {
-			                    	if(!ClassStorage.inOnePackage(node.name, field.owner)) {
-			                    		classAccesses.put(classNode.name, Level.PUBLIC);
-			                    	}
+									if(!ClassStorage.inOnePackage(node.name, field.owner)) {
+										classAccesses.put(classNode.name, Level.PUBLIC);
+									}
 								}
 							}
 						}
@@ -654,7 +653,7 @@ public final class Transform {
 						}
 						if(accessLevel == Level.PRIVATE) {
 							if(!node.name.equals(field.owner)) {
-	                    		fieldAccesses.put(ref, new Pair(fieldNode, Level.PUBLIC));
+								fieldAccesses.put(ref, new Pair<>(fieldNode, Level.PUBLIC));
 							}
 							continue;
 						}
@@ -668,9 +667,9 @@ public final class Transform {
 								}
 								if(isSuper) continue;
 							}
-	                    	if(!ClassStorage.inOnePackage(node.name, field.owner)) {
-								fieldAccesses.put(ref, new Pair(fieldNode, Level.PUBLIC));
-	                    	}
+							if(!ClassStorage.inOnePackage(node.name, field.owner)) {
+								fieldAccesses.put(ref, new Pair<>(fieldNode, Level.PUBLIC));
+							}
 							continue;
 						}
 					}

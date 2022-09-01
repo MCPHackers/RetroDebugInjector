@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 
 import org.mcphackers.rdi.injector.Injector;
 import org.mcphackers.rdi.injector.RDInjector;
@@ -56,7 +57,7 @@ public class Main {
 
 		// Export classes
 		try {
-			IOUtil.write(injector.getStorage(), Files.newOutputStream(outputJarFile), inputJarFile);
+			IOUtil.write(injector.getStorage(), Files.newOutputStream(outputJarFile), Collections.singletonList(inputJarFile));
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}

@@ -17,9 +17,9 @@ import net.fabricmc.mappingio.tree.MappingTree.MethodMapping;
 import net.fabricmc.mappingio.tree.MemoryMappingTree;
 
 public class Mappings {
-    public final FieldRenameMap fields = new FieldRenameMap();
-    public final MethodRenameMap methods = new MethodRenameMap();
-    public final Map<String, String> classes = new HashMap<>();
+	public final FieldRenameMap fields = new FieldRenameMap();
+	public final MethodRenameMap methods = new MethodRenameMap();
+	public final Map<String, String> classes = new HashMap<>();
 	
 	public Mappings() {
 	}

@@ -1,5 +1,7 @@
 package org.mcphackers.rdi.injector;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +31,7 @@ public class RDInjector implements Injector {
 	
 	public RDInjector(Path path) {
 		setStorage(new ClassStorage(IOUtil.read(path)));
+		addResources(path);
 	}
 	public RDInjector(List<ClassNode> nodes) {
 		setStorage(new ClassStorage(nodes));
@@ -37,6 +40,7 @@ public class RDInjector implements Injector {
 		setStorage(storage);
 	}
 
+	private List<Path> resourcesPath = new ArrayList<>();
 	private List<Injection> globalTransform = new ArrayList<>();
 	private ClassVisitor visitorStack;
 	private ClassStorage storage;
@@ -46,9 +50,17 @@ public class RDInjector implements Injector {
 		this.storage = storage;
 	}
 	
+	public void addResources(Path path) {
+		resourcesPath.add(path);
+	}
+	
 	@Override
 	public ClassStorage getStorage() {
 		return storage;
+	}
+	
+	public void write(Path path) throws IOException {
+		IOUtil.write(getStorage(), Files.newOutputStream(path), resourcesPath);
 	}
 
 	public void transform() {
@@ -60,6 +72,14 @@ public class RDInjector implements Injector {
 		}
 		globalTransform.clear();
 		visitorStack = null;
+	}
+	
+	public ClassVisitor getVisitor() {
+		return visitorStack;
+	}
+	
+	public void setVisitor(ClassVisitor visitor) {
+		visitorStack = visitor;
 	}
 	
 	public RDInjector applyMappings(Mappings mappings) {

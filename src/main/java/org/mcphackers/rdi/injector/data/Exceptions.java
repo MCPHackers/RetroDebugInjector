@@ -1,13 +1,16 @@
 package org.mcphackers.rdi.injector.data;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class Exceptions {
 	
@@ -15,7 +18,7 @@ public class Exceptions {
 		load(file);
 	}
 
-	private Map<String, List<String>> exceptions = new HashMap<>();
+	public Map<String, List<String>> exceptions = new HashMap<>();
 
 	public boolean load(Path file) {
 		this.exceptions.clear();
@@ -24,7 +27,7 @@ public class Exceptions {
 				line = line.trim();
 				if (line.isEmpty() || line.startsWith("#"))
 					return;
-				// New: net/minecraft/client/Minecraft/startGame()V org/lwjgl/LWJGLException java/io/IOException
+				// New: net/minecraft/client/Minecraft/startGame ()V org/lwjgl/LWJGLException java/io/IOException
 				// Old: net/minecraft/client/Minecraft.startGame()V=org/lwjgl/LWJGLException,java/io/IOException
 				boolean oldFormat = line.contains(".");
 				int idx = oldFormat ? line.lastIndexOf('=') : line.indexOf(' ', line.indexOf(' ') + 1);
@@ -33,6 +36,19 @@ public class Exceptions {
 				List<String> excs = Arrays.asList(line.substring(idx + 1).split(oldFormat ? "," : " "));
 				this.exceptions.put(key, excs);
 			});
+		} catch (IOException e) {
+			e.printStackTrace();
+			return false;
+		}
+		return true;
+	}
+
+	public boolean dump(Path file) {
+		try {
+			List<String> ret = this.exceptions.entrySet().stream()
+					.sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey()))
+					.map(e -> e.getKey() + " " + String.join(" ", e.getValue())).collect(Collectors.toList());
+			Files.write(file, String.join("\n", ret).getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE_NEW);
 		} catch (IOException e) {
 			e.printStackTrace();
 			return false;

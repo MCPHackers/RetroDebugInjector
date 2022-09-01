@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.mcphackers.rdi.util.FieldReference;
 import org.mcphackers.rdi.util.MethodReference;
@@ -76,25 +77,29 @@ public class ClassStorage {
 		}
 	}
 	
+	public List<String> getAllClasses() {
+		return nodes.stream().map(node -> node.name).collect(Collectors.toList());
+	}
+	
 	public static boolean inOnePackage(ClassNode node, ClassNode node2) {
 		return inOnePackage(node.name, node2.name);
 	}
 	
 	public static boolean inOnePackage(String node, String node2) {
-        int lastIndexOfSlash = node.lastIndexOf('/');
-        int lastIndexOfSlash2 = node2.lastIndexOf('/');
-        if(lastIndexOfSlash != lastIndexOfSlash2) {
-        	return false;
-        }
-        if(lastIndexOfSlash == -1 && lastIndexOfSlash2 == -1) {
-        	return true;
-        }
-        String packageName = node.substring(0, lastIndexOfSlash);
-        String packageName2 = node2.substring(0, lastIndexOfSlash2);
-        if (packageName.equals(packageName2)) {
+		int lastIndexOfSlash = node.lastIndexOf('/');
+		int lastIndexOfSlash2 = node2.lastIndexOf('/');
+		if(lastIndexOfSlash != lastIndexOfSlash2) {
+			return false;
+		}
+		if(lastIndexOfSlash == -1 && lastIndexOfSlash2 == -1) {
 			return true;
-        }
-        return false;
+		}
+		String packageName = node.substring(0, lastIndexOfSlash);
+		String packageName2 = node2.substring(0, lastIndexOfSlash2);
+		if (packageName.equals(packageName2)) {
+			return true;
+		}
+		return false;
 	}
 	
 }

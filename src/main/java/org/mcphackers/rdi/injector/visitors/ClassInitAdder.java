@@ -25,20 +25,17 @@ public class ClassInitAdder extends ClassVisitor {
 
 	@Override
 	public void visitMethod(MethodNode node) {
-		super.visitMethod(node);
 		if ("<init>".equals(node.name)) {
 			constructors.add(node.desc);
 		}
 	}
 	@Override
 	public void visitClass(ClassNode node) {
-		super.visitClass(node);
 		constructors.clear();
 	}
 
 	@Override
 	public void visitEnd(ClassNode node) {
-		super.visitEnd(node);
 		this.superName = node.superName;
 
 		if(!constructors.isEmpty()) { // No implicit constructor needed

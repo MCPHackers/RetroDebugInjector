@@ -20,13 +20,11 @@ public class AddExceptions extends ClassVisitor {
 
 	@Override
 	public void visitClass(ClassNode node) {
-		super.visitClass(node);
 		this.classNode = node;
 	}
 
 	@Override
 	public void visitMethod(MethodNode node) {
-		super.visitMethod(node);
 		if (!node.name.equals("<clinit>")) {
 			node.exceptions = processExceptions(classNode.name, node.name, node.desc, node.exceptions);
 		}

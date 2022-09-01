@@ -10,9 +10,6 @@ import org.objectweb.asm.tree.MethodNode;
 public abstract class ClassVisitor {
 	
 	protected ClassVisitor cv;
-	
-	public ClassVisitor() {
-	}
 
 	public ClassVisitor(ClassVisitor classVisitor) {
 		cv = classVisitor;
@@ -25,46 +22,66 @@ public abstract class ClassVisitor {
 	}
 	
 	public final void visit(ClassNode node) {
-		visitClass(node);
+		visitClass1(node);
 		for(InnerClassNode inner : node.innerClasses) {
-			visitInner(inner);
+			visitInner1(inner);
 		}
 		for(MethodNode method : node.methods) {
-			visitMethod(method);
+			visitMethod1(method);
 		}
 		for(FieldNode field : node.fields) {
-			visitField(field);
+			visitField1(field);
+		}
+		visitEnd1(node);
+	}
+	
+	private void visitClass1(ClassNode node) {
+		if (cv != null) {
+		  cv.visitClass1(node);
+		}
+		visitClass(node);
+	}
+
+	private void visitInner1(InnerClassNode node) {
+		if (cv != null) {
+		  cv.visitInner1(node);
+		}
+		visitInner(node);
+	}
+
+	private void visitMethod1(MethodNode node) {
+		if (cv != null) {
+		  cv.visitMethod1(node);
+		}
+		visitMethod(node);
+	}
+
+	private void visitField1(FieldNode node) {
+		if (cv != null) {
+		  cv.visitField1(node);
+		}
+		visitField(node);
+	}
+	
+	private void visitEnd1(ClassNode node) {
+		if (cv != null) {
+		  cv.visitEnd1(node);
 		}
 		visitEnd(node);
 	}
 	
 	protected void visitClass(ClassNode node) {
-		if (cv != null) {
-		  cv.visitClass(node);
-		}
 	}
 
 	protected void visitInner(InnerClassNode node) {
-		if (cv != null) {
-		  cv.visitInner(node);
-		}
 	}
 
 	protected void visitMethod(MethodNode node) {
-		if (cv != null) {
-		  cv.visitMethod(node);
-		}
 	}
 
 	protected void visitField(FieldNode node) {
-		if (cv != null) {
-		  cv.visitField(node);
-		}
 	}
 	
 	protected void visitEnd(ClassNode node) {
-		if (cv != null) {
-		  cv.visitEnd(node);
-		}
 	}
 }

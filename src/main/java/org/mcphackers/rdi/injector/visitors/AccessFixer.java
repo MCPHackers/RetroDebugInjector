@@ -17,7 +17,6 @@ public class AccessFixer extends ClassVisitor {
 
 	@Override
 	public void visitClass(ClassNode node) {
-		super.visitClass(node);
 		this.classNode = node;
 		Level old = Level.getFromBytecode(node.access);
 		Level _new = context.getLevel(node.name);
@@ -28,7 +27,6 @@ public class AccessFixer extends ClassVisitor {
 
 	@Override
 	public void visitField(FieldNode node) {
-		super.visitField(node);
 		Level old = Level.getFromBytecode(node.access);
 		Level _new = context.getLevel(classNode.name, node.name);
 		if (_new != null && old != _new) {
@@ -38,7 +36,6 @@ public class AccessFixer extends ClassVisitor {
 
 	@Override
 	public void visitMethod(MethodNode node) {
-		super.visitMethod(node);
 		Level old = Level.getFromBytecode(node.access);
 		Level _new = context.getLevel(classNode.name, node.name, node.desc);
 		if (_new != null && old != _new) {
