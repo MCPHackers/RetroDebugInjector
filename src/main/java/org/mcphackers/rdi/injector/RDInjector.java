@@ -25,6 +25,11 @@ import org.mcphackers.rdi.util.IOUtil;
 import org.objectweb.asm.tree.ClassNode;
 
 public class RDInjector implements Injector {
+
+	private List<Path> resourcesPath = new ArrayList<>();
+	private List<Injection> globalTransform = new ArrayList<>();
+	private ClassVisitor visitorStack;
+	private ClassStorage storage;
 	
 	public RDInjector() {
 	}
@@ -39,11 +44,6 @@ public class RDInjector implements Injector {
 	public RDInjector(ClassStorage storage) {
 		setStorage(storage);
 	}
-
-	private List<Path> resourcesPath = new ArrayList<>();
-	private List<Injection> globalTransform = new ArrayList<>();
-	private ClassVisitor visitorStack;
-	private ClassStorage storage;
 
 	@Override
 	public void setStorage(ClassStorage storage) {
@@ -74,12 +74,8 @@ public class RDInjector implements Injector {
 		visitorStack = null;
 	}
 	
-	public ClassVisitor getVisitor() {
-		return visitorStack;
-	}
-	
-	public void setVisitor(ClassVisitor visitor) {
-		visitorStack = visitor;
+	public void addVisitor(ClassVisitor visitor) {
+		visitorStack = ClassVisitor.merge(visitorStack, visitor);
 	}
 	
 	public RDInjector applyMappings(Mappings mappings) {

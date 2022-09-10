@@ -332,7 +332,6 @@ public final class Remapper {
 			node.name = newName;
 		}
 		storage.updateCache();
-		mappings.classes.clear();
 	}
 
 	private void remapAnnotation(AnnotationNode annotation, StringBuilder sharedStringBuilder) {

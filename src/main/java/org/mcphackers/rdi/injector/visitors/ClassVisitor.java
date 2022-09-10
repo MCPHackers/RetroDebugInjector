@@ -9,10 +9,31 @@ import org.objectweb.asm.tree.MethodNode;
 
 public abstract class ClassVisitor {
 	
-	protected ClassVisitor cv;
+	private ClassVisitor cv;
 
 	public ClassVisitor(ClassVisitor classVisitor) {
 		cv = classVisitor;
+	}
+	
+	public static ClassVisitor merge(ClassVisitor classVisitor, ClassVisitor classVisitor2) {
+		if(classVisitor2 == null) {
+			return classVisitor;
+		}
+		if(classVisitor == null) {
+			return classVisitor2;
+		}
+		ClassVisitor visitor = classVisitor2.cv;
+		while(visitor != null && visitor.cv != null) {
+			visitor = visitor.cv;
+		}
+		if(visitor != null) {
+			visitor.cv = classVisitor;
+			return classVisitor2;
+		}
+		else {
+			classVisitor2.cv = classVisitor;
+			return classVisitor2;
+		}
 	}
 	
 	public final void visit(List<ClassNode> nodes) {

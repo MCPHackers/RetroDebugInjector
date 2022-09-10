@@ -14,8 +14,8 @@ import org.objectweb.asm.tree.MethodNode;
 
 public class ClassStorage {
 	
-	private Map<String, ClassNode> cachedNodes = new HashMap<>();
-	private List<ClassNode> nodes = new ArrayList<>();
+	private final Map<String, ClassNode> cachedNodes = new HashMap<>();
+	private final List<ClassNode> nodes = new ArrayList<>();
 	
 	public ClassStorage(List<ClassNode> classNodes) {
 		nodes.addAll(classNodes);
