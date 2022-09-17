@@ -1,7 +1,7 @@
 package org.mcphackers.rdi.injector.transform;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -10,6 +10,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import org.mcphackers.rdi.injector.data.ClassStorage;
+import org.mcphackers.rdi.injector.remapper.MethodRenameMap;
+import org.mcphackers.rdi.injector.transform.GuessGenericsFromBridges.ClassTree.TreeNode;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -21,199 +23,188 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
-/**
- * This class is a nightmare and really scares me, you too probably
- */
 public class GuessGenericsFromBridges implements Injection {
 	
-	private ClassStorage storage;
+	private final ClassStorage storage;
 
-	private Map<ClassNode, List<ClassNode>> genericsTree = new HashMap<>();
-	private Map<ClassNode, List<String>> globalGuessedGenerics = new HashMap<>();
-	private Map<ClassNode, Set<BridgePair>> bridges = new HashMap<>();
-
-	private List<ClassNode> getParametrizedChildren(ClassNode node) {
-		return genericsTree.get(node);
-	}
-
-	private ClassNode getParametrizedParent(ClassNode node) {
-		for (Entry<ClassNode, List<ClassNode>> classNodes : genericsTree.entrySet()) {
-			if(classNodes.getValue() != null && classNodes.getValue().contains(node)) {
-				return classNodes.getKey();
-			}
-		}
-		return null;
-		
-	}
+	private ClassTree classTree = new ClassTree();
+	private MethodRenameMap renameMap = new MethodRenameMap();
 
 	public GuessGenericsFromBridges(ClassStorage storage) {
 		this.storage = storage;
 	}
-	
-	private void removeAndCollectRenamedNodes(ClassNode node, Map<String, String> collectedNames) {
-		Set<BridgePair> forRemoval = bridges.get(node);
-		Map<String, String> methodRenames = new HashMap<>();
-		if(forRemoval != null) {
-			for(BridgePair pair : forRemoval) {
-				// Removing bridges
-				if(!collectedNames.containsKey(pair.renamedMethod.name)) {
-					collectedNames.put(pair.renamedMethod.name, pair.removedMethod.name);
-				}
-				String rename = pair.removedMethod.name;
-				while (collectedNames.containsKey(rename) && collectedNames.get(rename) != null && !collectedNames.get(rename).equals(rename)) {
-					rename = collectedNames.get(rename);
-				}
-				methodRenames.put(pair.renamedMethod.name, rename);
-				pair.renamedMethod.name = rename;
-				//node.methods.remove(pair.removedMethod);
-			}
-		}
-		renamingMap.put(node.name, methodRenames);
-	}
-	
-	private void deleteBridges(ClassNode currentNode, Map<String, String> collectedNames) {
-		setGenerics(currentNode);
-		removeAndCollectRenamedNodes(currentNode, collectedNames);
-		if(getParametrizedChildren(currentNode) == null) {
-			return;
-		}
-		for(ClassNode node : getParametrizedChildren(currentNode)) {
-			deleteBridges(node, collectedNames);
-		}
-	}
-	
-	private Map<String, Map<String, String>> renamingMap = new HashMap<>();
 
 	@Override
 	public void transform() {
 		for(ClassNode node : storage.getClasses()) {
-			if(!fixComparator(node)) {
-				fixOtherBridges(node);
-			}
+			findBridges(node);
 		}
-		a:
-		for (Entry<ClassNode, List<ClassNode>> entry : genericsTree.entrySet()) {
-			ClassNode startNode = entry.getKey();
-			if(getParametrizedParent(startNode) != null || !startNode.interfaces.isEmpty()) {
-				continue;
+		classTree.build();
+		NodeDelegate delegate1 = (treeNode) -> {
+			if(treeNode.children == null) {
+				return;
 			}
-			if(getParametrizedChildren(startNode) != null) {
-				for(ClassNode cn : getParametrizedChildren(startNode)) {
-					//FIXME temp fix for decompiling mc beta
-					if(!cn.interfaces.isEmpty()) continue a;
-				}
-			}
-			Map<String, String> renamingMap = new HashMap<>();
-			for(MethodNode method : startNode.methods) {
-				// I know this look dumb, but it's there to prevent other bridge methods occupying renaming keys of their parent
-				renamingMap.put(method.name, null);
-			}
-			deleteBridges(startNode, renamingMap);
-		}
-		for(ClassNode node : storage.getClasses()) {
-			for(MethodNode method : node.methods) {
-				// Update method references
-				for(AbstractInsnNode insn = method.instructions.getFirst(); insn != null ; insn = insn.getNext()) {
-					if(!(insn instanceof MethodInsnNode)) {
+			Map<MethodNode, int[]> methodIndexes = new HashMap<>();
+			for(TreeNode child : treeNode.children) {
+				for(Bridge bridge : child.bridges) {
+					if(bridge.parentInvokeMethod == null) {
 						continue;
 					}
-					MethodInsnNode invoke = (MethodInsnNode) insn;
-					Map<String, String> renameMap = renamingMap.get(invoke.owner);
-					String rename = null;
-					if(renameMap != null) {
-						rename = renameMap.get(invoke.name);
-					}
-					if(rename != null) {
-						invoke.name = rename;
+					int[] indexes = methodIndexes.get(bridge.parentInvokeMethod);
+					if(indexes == null) {
+						methodIndexes.put(bridge.parentInvokeMethod, bridge.genericIndexes);
+					} else {
+						for(int i = 0; i < indexes.length; i++) {
+				            if (indexes[i] < bridge.genericIndexes[i]) {
+				            	methodIndexes.put(bridge.parentInvokeMethod, bridge.genericIndexes);
+				            }
+						}
 					}
 				}
 			}
-		}
+			boolean verifyGenerics = true;
+			for(TreeNode child : treeNode.children) {
+				String[] childGenerics = new String[1];
+				String[] generics = new String[1];
+				for(Bridge bridge : child.bridges) {
+					int[] indexes = methodIndexes.get(bridge.parentInvokeMethod);
+					if(indexes == null) continue;
+					bridge.genericIndexes = indexes;
+					for(int i = 0; i < indexes.length; i++) {
+			            if (indexes[i] > 0) {
+			            	childGenerics = childGenerics.length < indexes[i] ? childGenerics : Arrays.copyOf(childGenerics, indexes[i]);
+			            	childGenerics[indexes[i] - 1] = bridge.generics[i];
+			            	if(verifyGenerics) {
+			            		generics = generics.length < indexes[i] ? generics : Arrays.copyOf(generics, indexes[i]);
+				            	if(i == indexes.length - 1) {
+					            	Type type = Type.getReturnType(bridge.parentInvokeMethod.desc);
+					            	generics[indexes[i] - 1] = type.getDescriptor();
+				            	} else {
+					            	Type[] types = Type.getArgumentTypes(bridge.parentInvokeMethod.desc);
+					            	generics[indexes[i] - 1] = types[i].getDescriptor();
+				            	}
+			            	}
+			            }
+					}
+				}
+				child.generics = Arrays.asList(childGenerics);
+				if(verifyGenerics) {
+					treeNode.generics = Arrays.asList(generics);
+					verifyGenerics = false;
+				}
+			}
+		};
+		classTree.walk(delegate1);
+		NodeDelegate delegate = (treeNode) -> {
+			applySignatures(treeNode);
+		};
+		classTree.walk(delegate);
+//		renameReferences();
 	}
 	
-	private static String getMethodSig(List<String> generics, String desc) {
-		char startChar = 'T';
-		String sig = desc;
-		for(String s : generics) {
-			sig = sig.replace(s, "T" + String.valueOf(startChar) + ";");
-			startChar += 1;
-		}
-		return sig;
-	}
-	
-	private void setGenerics(ClassNode node) {
-		List<String> generics = globalGuessedGenerics.get(node);
-		if(generics == null)
+	private void applySignatures(TreeNode treeNode) {
+		ClassNode node = treeNode.classNode;
+		List<Bridge> bridges = treeNode.bridges;
+		List<String> generics = treeNode.generics;
+		if(generics == null /*|| generics.size() > 1 FIXME generics with more than one type are hard to guess properly*/)
 			return;
 		String interfaces = "";
 		for(String itf : node.interfaces) {
 			interfaces += "L" + itf + ";";
 		}
-		if(getParametrizedParent(node) != null && getParametrizedChildren(node) != null) {
-			node.signature = getGenerics(generics, true) + "L" + node.superName + getGenerics(generics.size()) + ";" + interfaces;
-			for(MethodNode method : node.methods) {
-				method.signature = getMethodSig(generics, method.desc);
+		node.version = Math.max(50 /*JAVA 6*/, node.version);
+		if(treeNode.parent != null) {
+			treeNode.parent.classNode.version = Math.max(50, treeNode.parent.classNode.version);
+		}
+		if(treeNode.parent != null && treeNode.children != null) {
+			if(bridges != null) {
+				node.signature = getGenerics(generics, true) + "L" + node.superName + getGenerics(generics.size()) + ";" + interfaces;
+				for(Bridge bridge : bridges) {
+					bridge.invokeMethod.signature = getMethodSig(bridge.genericIndexes, bridge.invokeMethod.desc);
+					if(bridge.parentInvokeMethod != null) {
+						bridge.parentInvokeMethod.signature = getMethodSig(bridge.genericIndexes, bridge.parentInvokeMethod.desc);
+					}
+				}
 			}
 		}
-		else if(getParametrizedParent(node) != null) {
+		else if(treeNode.children == null) {
 			node.signature = "L" + node.superName + getGenerics(generics, false) + ";" + interfaces;
-		}
-		else if(getParametrizedChildren(node) != null) {
-			node.signature = getGenerics(generics, true) + "L" + node.superName + ";" + interfaces;
-			for(MethodNode method : node.methods) {
-				method.signature = getMethodSig(generics, method.desc);
+			if(bridges != null)
+			for(Bridge bridge : bridges) {
+				if(bridge.parentInvokeMethod != null) {
+					bridge.parentInvokeMethod.signature = getMethodSig(bridge.genericIndexes, bridge.parentInvokeMethod.desc);
+				}
 			}
 		}
+		else if(treeNode.parent == null) {
+			node.signature = getGenerics(generics, true) + "L" + node.superName + ";" + interfaces;
+		}
+	}
+
+	private static String getMethodSig(int[] genericIndexes, String desc) {
+		char startChar = 'T';
+		StringBuilder sig = new StringBuilder("(");
+		Type[] types = Type.getArgumentTypes(desc);
+		for(int i = 0; i < types.length; i++) {
+			int index = genericIndexes[i];
+			if(index == 0) {
+				sig.append(types[i].getDescriptor());
+			} else {
+				sig.append("T").append((char)(startChar + index - 1)).append(";");
+			}
+		}
+		sig.append(")");
+		Type type = Type.getReturnType(desc);
+		int index = genericIndexes[genericIndexes.length - 1];
+		if(index == 0) {
+			sig.append(type.getDescriptor());
+		} else {
+			sig.append("T").append((char)(startChar + index - 1)).append(";");
+		}
+		return sig.toString();
 	}
 	
 	public static String getGenerics(int size) {
 		char startChar = 'T';
-		String genericsSelf = "<";
+		StringBuilder genericsSelf = new StringBuilder("<");
 		for(int i = 0; i < size; i++) {
-			genericsSelf += 'T' + String.valueOf(startChar) + ";";
+			genericsSelf.append('T').append(startChar).append(";");
 			startChar += 1;
 		}
-		genericsSelf += ">";
-		return genericsSelf;
+		genericsSelf.append(">");
+		return genericsSelf.toString();
 	}
 	
 	public static String getGenerics(List<String> generics, boolean parametrized) {
 		char startChar = 'T';
-		String genericsSelf = "<";
+		StringBuilder genericsSelf = new StringBuilder("<");
 		for(String s : generics) {
 			if(parametrized) {
-				genericsSelf += String.valueOf(startChar) + ":" + s;
+				genericsSelf.append(startChar).append(":").append(s);
 				startChar += 1;
 			}
 			else {
-				genericsSelf += s;
+				genericsSelf.append(s);
 			}
 		}
-		genericsSelf += ">";
-		return genericsSelf;
+		genericsSelf.append(">");
+		return genericsSelf.toString();
 	}
-
-	private List<MethodNode> visitedNodes = new ArrayList<>();
 	
-	private void fixOtherBridges(ClassNode node) {
+	private void findBridges(ClassNode node) {
 		ClassNode superClass = storage.getClass(node.superName);
-		if (superClass != null && !node.interfaces.isEmpty()) {
-			superClass = storage.getClass(node.interfaces.get(0));
-		}
-		List<String> guessedGenerics = new ArrayList<>();
-		List<String> guessedGenericsSuper = new ArrayList<>();
-		Set<BridgePair> bridges = new HashSet<>();
+		List<Bridge> bridges = new ArrayList<>();
+		Set<String> generics = new HashSet<>();
+		Set<String> genericsSuper = new HashSet<>();
 		nextMethod:
 		for (MethodNode method : node.methods) {
-			if (visitedNodes.contains(method)) {
-				continue;
-			}
 			if ((method.access & Opcodes.ACC_SYNTHETIC) == 0) {
 				continue;
 			}
-			if ((method.access & Opcodes.ACC_BRIDGE) == 0) {
-				continue;
-			}
+			// May not have bridge modifier? WTF
+//			if ((method.access & Opcodes.ACC_BRIDGE) == 0) {
+//				continue;
+//			}
 			AbstractInsnNode insn = method.instructions.getFirst();
 			while (insn instanceof LabelNode || insn instanceof LineNumberNode) {
 				insn = insn.getNext();
@@ -226,7 +217,10 @@ public class GuessGenericsFromBridges implements Injection {
 				continue;
 			}
 			insn = insn.getNext();
-			for(Type type : Type.getArgumentTypes(method.desc)) {
+			Type[] types = Type.getArgumentTypes(method.desc);
+			String[] genericTypes = new String[types.length + 1];
+			int i = 0;
+			for(Type type : types) {
 				if(type.getOpcode(Opcodes.ILOAD) != insn.getOpcode()) {
 					continue nextMethod;
 				}
@@ -234,35 +228,23 @@ public class GuessGenericsFromBridges implements Injection {
 				if(insn.getOpcode() == Opcodes.CHECKCAST) {
 					TypeInsnNode typeinsn = (TypeInsnNode)insn;
 					String desc = "L" + typeinsn.desc + ";";
-					if(!guessedGenerics.contains(desc)) {
-						guessedGenerics.add(desc);
-					}
-					//TODO save method signature
-					//Guess generics for superclass (it'll be corrected once it visits it's bridge methods)
-					if(superClass != null && globalGuessedGenerics.get(superClass) == null) {
-						for(MethodNode m : superClass.methods) {
-							if (m.name.equals(method.name) && m.desc.equals(method.desc) && (m.access & Opcodes.ACC_BRIDGE) == 0) {
-								if(!guessedGenericsSuper.contains(type.getDescriptor())) {
-									guessedGenericsSuper.add(type.getDescriptor());
-								}
-							}
-						}
-					}
+					genericTypes[i] = desc;
+					generics.add(desc);
+					genericsSuper.add(type.getDescriptor());
 					insn = insn.getNext();
 				}
+				i++;
 			}
 			if(insn.getOpcode() != Opcodes.INVOKEVIRTUAL) {
 				continue;
 			}
+			MethodNode invokeParentMethod = null;
 			MethodInsnNode invokevirtual = (MethodInsnNode) insn;
-			// Account for different return types
-			Type typeRet = Type.getReturnType(method.desc);
-			Type typeRet2 = Type.getReturnType(invokevirtual.desc);
-			if(typeRet.getSort() == Type.OBJECT && typeRet2.getSort() == Type.OBJECT && !typeRet.equals(typeRet2) &&
-					!typeRet2.getInternalName().equals(node.name)) {
-				String desc = typeRet2.getDescriptor();
-				if(!guessedGenerics.contains(desc)) {
-					guessedGenerics.add(desc);
+			if(superClass != null) {
+				for(MethodNode m : superClass.methods) {
+					if (m.name.equals(method.name) && m.desc.equals(method.desc)) {
+						invokeParentMethod = m;
+					}
 				}
 			}
 			insn = insn.getNext();
@@ -270,134 +252,209 @@ public class GuessGenericsFromBridges implements Injection {
 			if (retType.getOpcode(Opcodes.IRETURN) != insn.getOpcode()) {
 				continue;
 			}
-			visitedNodes.add(method);
-			//Collect bridges
-			MethodNode renamedMethod = null;
+			Type retType2 = Type.getReturnType(invokevirtual.desc);
+			if(retType.getSort() == Type.OBJECT && retType2.getSort() == Type.OBJECT && !retType.equals(retType2)) {
+				String desc = retType2.getDescriptor();
+				genericTypes[genericTypes.length - 1] = desc;
+				generics.add(desc);
+			}
+			insn = insn.getNext();
+			MethodNode invokeMethod = null;
 			for (MethodNode m : node.methods) {
 				if (m.name.equals(invokevirtual.name) && m.desc.equals(invokevirtual.desc)) {
-					renamedMethod = m;
+					invokeMethod = m;
 					break;
 				}
 			}
-			if(renamedMethod != null) {
-				bridges.add(new BridgePair(node, method, renamedMethod));
-			}
+			if(invokeMethod == null) continue;
+			bridges.add(new Bridge(method, invokeMethod, invokeParentMethod, genericTypes));
 		}
 		if(!bridges.isEmpty()) {
-			globalGuessedGenerics.put(node, guessedGenerics);
-			if(superClass != null && !guessedGenericsSuper.isEmpty()) {
-				globalGuessedGenerics.put(superClass, guessedGenericsSuper);
+			for(Bridge bridge : bridges) {
+				bridge.genericIndexes = bridge.getIndexes(new ArrayList<>(generics));
 			}
-			ClassNode supercl = storage.getClass(node.superName);
-			if(supercl != null) {
-				List<ClassNode> nodes = genericsTree.get(supercl);
+			// Building class tree
+			if(superClass != null) {
+				List<ClassNode> nodes = classTree.processedTree.get(superClass);
 				if(nodes != null) {
 					nodes.add(node);
 				}
 				else {
 					nodes = new ArrayList<>();
 					nodes.add(node);
-					genericsTree.put(supercl, nodes);
+					classTree.processedTree.put(superClass, nodes);
 				}
 			}
 			else {
-				genericsTree.put(node, null);
+				classTree.processedTree.put(node, null);
 			}
-			this.bridges.put(node, bridges);
+			classTree.bridges.put(node, bridges);
+			classTree.generics.put(node, new ArrayList<>(generics));
+			if(superClass != null && !genericsSuper.isEmpty()) {
+				classTree.generics.put(superClass, new ArrayList<>(genericsSuper));
+			}
 		}
 	}
 	
-	public class BridgePair {
-		public final ClassNode ownerClass;
-		public final MethodNode renamedMethod;
-		public final MethodNode removedMethod;
-		public BridgePair(ClassNode owner, MethodNode node1, MethodNode node2) {
-			removedMethod = node1;
-			renamedMethod = node2;
-			ownerClass = owner;
+	public void renameReferences() {
+//		List<Bridge> bridges = node.bridges;
+//		if(bridges == null) {
+//			return;
+//		}
+//		for(Bridge pair : bridges) {
+//			String rename = pair.invokeMethod.name;
+//			renameMap.put(node.classNode.name, pair.bridgeMethod.desc, pair.bridgeMethod.name, rename);
+//			pair.bridgeMethod.name = rename;
+//		}
+		for(ClassNode node : storage.getClasses()) {
+			for(MethodNode method : node.methods) {
+				for(AbstractInsnNode insn : method.instructions) {
+					if(!(insn instanceof MethodInsnNode)) {
+						continue;
+					}
+					MethodInsnNode invoke = (MethodInsnNode) insn;
+					String rename = renameMap.get(invoke.owner, invoke.desc, invoke.name);
+					if(rename != null) {
+						invoke.name = rename;
+					}
+				}
+			}
 		}
 	}
 	
-	/**
-	 * Remove bridges and add generics for comparator class
-	 * @param node
-	 * @return true if processed node is a comparator 
-	 */
-	private boolean fixComparator(ClassNode node) {
+	private interface NodeDelegate {
+		void call(TreeNode node);
+	}
+	
+	public class ClassTree {
+		
+		List<TreeNode> root = new ArrayList<>();
+		Map<ClassNode, TreeNode> cache = new HashMap<>();
+		
+		Map<ClassNode, List<ClassNode>> processedTree = new HashMap<>();
+		Map<ClassNode, List<Bridge>> bridges = new HashMap<>();
+		Map<ClassNode, List<String>> generics = new HashMap<>();
+		
+		public class TreeNode {
+			private final ClassNode classNode;
+			
+			TreeNode parent;
+			List<TreeNode> children;
+			
+			List<Bridge> bridges;
+			List<String> generics;
+			
+			public TreeNode(ClassNode node) {
+				classNode = node;
+				cache.put(node, this);
+			}
+		}
 
-		if (node.interfaces.size() != 1) {
-			return false;
-		}
-		if (!node.interfaces.get(0).equals("java/util/Comparator")) {
-			return false;
-		}
-		// Ljava/lang/Object;Ljava/util/Comparator<Lorg/junit/runner/Description;>;
-		for (MethodNode method : node.methods) {
-			try {
-				if ((method.access & Opcodes.ACC_SYNTHETIC) == 0) {
-					continue;
-				}
-				if ((method.access & Opcodes.ACC_BRIDGE) == 0) {
-					continue;
-				}
-				if (method.name.equals("compare") && method.desc.equals("(Ljava/lang/Object;Ljava/lang/Object;)I")) {
-//					if(node.signature != null && !node.signature.equals("Ljava/lang/Object;Ljava/util/Comparator<Ljava/lang/Object;>")) {
-//						node.methods.remove(method);
-//						return true;
-//					}
-					AbstractInsnNode insn = method.instructions.getFirst();
-					while (insn instanceof LabelNode || insn instanceof LineNumberNode) {
-						insn = insn.getNext();
+		public void build() {
+			for (Entry<ClassNode, List<ClassNode>> classNodes : processedTree.entrySet()) {
+				TreeNode treeNode = new TreeNode(classNodes.getKey());
+				treeNode.generics = generics.get(treeNode.classNode);
+				treeNode.bridges = bridges.get(treeNode.classNode);
+			}
+			for (Entry<ClassNode, List<ClassNode>> classNodes : processedTree.entrySet()) {
+				ClassNode parent = null;
+				for (Entry<ClassNode, List<ClassNode>> classNodes2 : processedTree.entrySet()) {
+					if(classNodes2.getValue() != null && classNodes2.getValue().contains(classNodes.getKey())) {
+						parent = classNodes2.getKey();
 					}
-					// List of expected instructions for compare's bridge
-					int[] opcodes = {
-							Opcodes.ALOAD,
-							Opcodes.ALOAD,
-							Opcodes.CHECKCAST,
-							Opcodes.ALOAD,
-							Opcodes.CHECKCAST,
-							Opcodes.INVOKEVIRTUAL,
-							Opcodes.IRETURN
-							};
-					MethodInsnNode invokevirtual = null;
-					for(int i = 0; i < opcodes.length; i++) {
-						if(i != 0) {
-							insn = insn.getNext();
+				}
+				TreeNode node = cache.get(classNodes.getKey());
+				TreeNode parentNode = cache.get(parent);
+				node.parent = parentNode;
+				List<TreeNode> children = null;
+				if(processedTree.get(node.classNode) != null) {
+					children = new ArrayList<>();
+					for(ClassNode classNode : processedTree.get(node.classNode)) {
+						TreeNode cachedNode = cache.get(classNode);
+						if(cachedNode == null) {
+							cachedNode = new TreeNode(classNode);
+							cachedNode.parent = node;
+							cachedNode.generics = generics.get(classNode);
+							cachedNode.bridges = bridges.get(classNode);
+							children.add(cachedNode);
 						}
-						if (insn.getOpcode() != opcodes[i]) {
-							throw new IllegalStateException("invalid bridge method: unexpected opcode");
-						}
-						if(i == 0) {
-							VarInsnNode aloadThis = (VarInsnNode) insn;
-							if (aloadThis.var != 0) {
-								throw new IllegalStateException("invalid bridge method: unexpected variable loaded");
-							}
-						}
-						if(insn.getOpcode() == Opcodes.INVOKEVIRTUAL) {
-							invokevirtual = (MethodInsnNode) insn;
+						else {
+							children.add(cachedNode);
 						}
 					}
-					for (MethodNode m : node.methods) {
-						if (m.name.equals(invokevirtual.name) && m.desc.equals(invokevirtual.desc)) {
-							//Rename called method
-							renamingMap.put(node.name, Collections.singletonMap(m.name, method.name));
-							m.name = method.name;
-							break;
-						}
-					}
-					//Add generics
-					String generics = invokevirtual.desc.substring(1, invokevirtual.desc.indexOf(';'));
-					node.signature = "Ljava/lang/Object;Ljava/util/Comparator<" + generics + ";>;";
-					//TODO remove bridge in the decompiler instead of removing in bytecode
-					//node.methods.remove(method);
-					return true;
 				}
-			} catch (IllegalStateException e) {
-				// Not a bridge
-				method.access &= ~Opcodes.ACC_BRIDGE;
+				node.children = children;
+				if(parentNode == null) {
+					root.add(node);
+				}
 			}
 		}
-		return false;
+				
+		public void walk(NodeDelegate delegate) {
+			for(TreeNode node : root) {
+				walk(node, delegate);
+			}
+		}
+		
+		public void walk(TreeNode node, NodeDelegate delegate) {
+			delegate.call(node);
+			if(node.children != null) {
+				for(TreeNode node2 : node.children) {
+					walk(node2, delegate);
+				}
+			}
+		}
+		
+		public ClassNode getParent(ClassNode node) {
+			TreeNode treeNode = cache.get(node);
+			if(treeNode != null && treeNode.parent != null) {
+				return treeNode.parent.classNode;
+			}
+			return null;
+		}
+		
+		public List<ClassNode> getChildren(ClassNode node) {
+			TreeNode treeNode = cache.get(node);
+			if(treeNode != null && treeNode.children != null) {
+				List<ClassNode> nodes = new ArrayList<>();
+				for(TreeNode treeNode2 : treeNode.children) {
+					nodes.add(treeNode2.classNode);
+				}
+				return nodes;
+			}
+			return null;
+		}
+	}
+	
+	public class Bridge {
+		public final MethodNode bridgeMethod;
+		public final MethodNode invokeMethod;
+		public final MethodNode parentInvokeMethod;
+		public final String[] generics;
+		public int[] genericIndexes;
+		public Bridge(MethodNode bridge, MethodNode invoke, MethodNode parentInvoke, String[] generics) {
+			bridgeMethod = bridge;
+			invokeMethod = invoke;
+			parentInvokeMethod = parentInvoke;
+			this.generics = generics;
+		}
+		
+		/**
+		 * genericsList == List {Entity, Model}
+		 * String[] generics == String[] {Entity, Model, null}
+		 * int[] indexes == int[] {1, 2, 0}
+		 * @param genericsList
+		 */
+		private int[] getIndexes(List<String> genericsList) {
+			int[] indexes = new int[generics.length];
+			for(int i = 0; i < generics.length; i++) {
+				String val = generics[i];
+				if(val != null) {
+					indexes[i] = genericsList.indexOf(val) + 1;
+				}
+			}
+			return indexes;
+		}
 	}
 
 }

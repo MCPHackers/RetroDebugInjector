@@ -98,6 +98,11 @@ public class RDInjector implements Injector {
 		return this;
 	}
 	
+	public RDInjector setMajorVersion(int version) {
+		globalTransform.add(() -> Transform.setMajorVersion(storage, version));
+		return this;
+	}
+	
 	public RDInjector stripLVT() {
 		globalTransform.add(() -> Transform.stripLVT(storage));
 		return this;

@@ -714,6 +714,17 @@ public final class Transform {
 	}
 	
 	/**
+	 * Sets class version for every class in <code>storage</code>
+	 * @param storage
+	 * @param version
+	 */
+	public static void setMajorVersion(ClassStorage storage, int version) {
+		for(ClassNode node : storage.getClasses()) {
+			node.version = version;
+		}
+	}
+	
+	/**
 	 * Clears local variable table for every method in each class
 	 * @param storage
 	 */
