@@ -8,6 +8,7 @@ import org.mcphackers.rdi.util.MethodReference;
 public class MethodRenameMap {
 
 	private final Map<MethodReference, String> renames = new HashMap<>();
+	private final Map<MethodReference, String[]> lvt = new HashMap<>();
 
 	public MethodRenameMap() {
 	}
@@ -47,9 +48,18 @@ public class MethodRenameMap {
 
 	public void putAll(MethodRenameMap other) {
 		other.renames.forEach(this.renames::put);
+		other.lvt.forEach(this.lvt::put);
 	}
 
 	public int size() {
 		return renames.size();
+	}
+
+	public String[] getLVMappings(String owner, String descriptor, String oldName) {
+		return lvt.get(new MethodReference(owner, descriptor, oldName));
+	}
+
+	public void setLVMappings(String owner, String descriptor, String oldName, String[] params) {
+		lvt.put(new MethodReference(owner, descriptor, oldName), params);
 	}
 }

@@ -23,6 +23,7 @@ import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.LocalVariableNode;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -94,10 +95,12 @@ public final class Remapper {
 		for (ClassNode node : storage.getClasses()) {
 			for (MethodNode method : node.methods) {
 				String newName = mappings.methods.get(node.name, method.desc, method.name);
+				String[] params = mappings.methods.getLVMappings(node.name, method.desc, method.name);
 				if (newName == null) {
 					continue;
 				}
 				hierarchisedMethodRenames.put(node.name, method.desc, method.name, newName);
+				hierarchisedMethodRenames.setLVMappings(node.name, method.desc, method.name, params);
 				Set<String> childNodes = children.get(node.name);
 				if (childNodes == null) {
 					continue;
@@ -124,12 +127,14 @@ public final class Remapper {
 				if ((method.access & Opcodes.ACC_PROTECTED) != 0 || (method.access & Opcodes.ACC_PUBLIC) != 0) {
 					for (String child : childNodes) {
 						hierarchisedMethodRenames.put(child, method.desc, method.name, newName);
+						hierarchisedMethodRenames.setLVMappings(child, method.desc, method.name, params);
 					}
 				} else if ((method.access & Opcodes.ACC_PRIVATE) == 0) {
 					// Package-protected
 					for (String child : childNodes) {
 						if(ClassStorage.inOnePackage(node.name, child)) {
 							hierarchisedMethodRenames.put(child, method.desc, method.name, newName);
+							hierarchisedMethodRenames.setLVMappings(child, method.desc, method.name, params);
 						}
 					}
 				}
@@ -494,6 +499,7 @@ public final class Remapper {
 	}
 
 	private void remapMethod(ClassNode owner, MethodNode method, StringBuilder sharedStringBuilder) {
+		String[] lvMappings = hierarchisedMethodRenames.getLVMappings(owner.name, method.desc, method.name);
 		method.name = hierarchisedMethodRenames.optGet(owner.name, method.desc, method.name);
 		for (int i = 0; i < method.exceptions.size(); i++) {
 			String newExceptionName = mappings.classes.get(method.exceptions.get(i));
@@ -577,6 +583,56 @@ public final class Remapper {
 				method.signature = sharedStringBuilder.toString();
 			}
 		}
+		if(lvMappings != null) {
+			boolean isStatic = (method.access & Opcodes.ACC_STATIC) != 0;
+			LabelNode first = null;
+			LabelNode last = null;
+			AbstractInsnNode insn1 = method.instructions.getFirst();
+			while (insn1 != null) {
+				if(insn1 instanceof LabelNode) {
+					first = (LabelNode)insn1;
+					break;
+				}
+				insn1 = insn1.getNext();
+			}
+			insn1 = method.instructions.getLast();
+			while (insn1 != null) {
+				if(insn1 instanceof LabelNode) {
+					last = (LabelNode)insn1;
+					break;
+				}
+				insn1 = insn1.getPrevious();
+			}
+			if(method.localVariables != null) {
+				Type[] paramTypes = Type.getArgumentTypes(method.desc);
+				for(int i = 0; i < lvMappings.length; i++) {
+					String name = lvMappings[i];
+					if(name == null) continue;
+					boolean foundVar = false;
+					for (LocalVariableNode lvn : method.localVariables) {
+						if(lvn.index == i) {
+							lvn.name = name;
+							foundVar = true;
+							break;
+						}
+					}
+					if(!foundVar) {
+						String desc = getParamDesc(paramTypes, isStatic, i);
+						method.localVariables.add(new LocalVariableNode(name, desc, null, first, last, i));
+					}
+				}
+			}
+			else {
+				Type[] paramTypes = Type.getArgumentTypes(method.desc);
+				method.localVariables = new ArrayList<>();
+				for(int i = 0; i < lvMappings.length; i++) {
+					String name = lvMappings[i];
+					if(name == null) continue;
+					String desc = getParamDesc(paramTypes, isStatic, i);
+					method.localVariables.add(new LocalVariableNode(name, desc, null, first, last, i));
+				}
+			}
+		}
 		if (method.annotationDefault != null && !(method.annotationDefault instanceof Number)) {
 			// Little cheat to avoid writing the same code twice :)
 			List<Object> annotationList = Arrays.asList(method.annotationDefault);
@@ -644,6 +700,17 @@ public final class Remapper {
 				insn = insn.getNext();
 			}
 		}
+	}
+	
+	private String getParamDesc(Type[] parameters, boolean isStatic, int lvIndex) {
+		int paramIndex = isStatic ? 0 : 1;
+		for(int i = 0; i < parameters.length; i++) {
+			if(paramIndex == lvIndex) {
+				return parameters[i].getDescriptor();
+			}
+			paramIndex += parameters[i].getSize();
+		}
+		return null;
 	}
 
 	private void remapModule(ModuleNode module, StringBuilder sharedStringBuilder) {

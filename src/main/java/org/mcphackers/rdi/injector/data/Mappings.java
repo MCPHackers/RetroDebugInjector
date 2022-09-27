@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -14,6 +15,7 @@ import net.fabricmc.mappingio.format.Tiny1Reader;
 import net.fabricmc.mappingio.format.Tiny2Reader;
 import net.fabricmc.mappingio.tree.MappingTree.ClassMapping;
 import net.fabricmc.mappingio.tree.MappingTree.FieldMapping;
+import net.fabricmc.mappingio.tree.MappingTree.MethodArgMapping;
 import net.fabricmc.mappingio.tree.MappingTree.MethodMapping;
 import net.fabricmc.mappingio.tree.MemoryMappingTree;
 
@@ -67,6 +69,11 @@ public class Mappings {
 							methodMapping.getDesc(srcNamespace),
 							methodMapping.getName(srcNamespace),
 							methodMapping.getName(targetNamespace));
+					mappings.methods.setLVMappings(
+							className,
+							methodMapping.getDesc(srcNamespace),
+							methodMapping.getName(srcNamespace),
+							getParameterMappings(methodMapping.getArgs(), targetNamespace));
 				}
 			}
 		} catch (IOException e) {
@@ -75,6 +82,18 @@ public class Mappings {
 		return mappings;
 	}
 	
+	private static String[] getParameterMappings(Collection<? extends MethodArgMapping> args, String targetNamespace) {
+		int maxIndex = -1;
+		for(MethodArgMapping mapping : args) {
+			maxIndex = Math.max(mapping.getLvIndex(), maxIndex);
+		}
+		String[] params = new String[maxIndex + 1];
+		for(MethodArgMapping mapping : args) {
+			params[mapping.getLvIndex()] = mapping.getName(targetNamespace);
+		}
+		return params;
+	}
+
 	public static Provider getProvider(Path mappings) {
 		try(BufferedReader reader = Files.newBufferedReader(mappings)) {
 			String header = reader.readLine();
