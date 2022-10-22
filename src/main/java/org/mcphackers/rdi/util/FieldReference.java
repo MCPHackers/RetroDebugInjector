@@ -18,14 +18,14 @@ public final class FieldReference {
 	private final String owner;
 
 	public FieldReference(FieldInsnNode instruction) {
-		this(instruction.owner, instruction.desc, instruction.name);
+		this(instruction.owner, instruction.name, instruction.desc);
 	}
 
 	public FieldReference(String owner, FieldNode node) {
-		this(owner, node.desc, node.name);
+		this(owner, node.name, node.desc);
 	}
 
-	public FieldReference(String owner, String desc, String name) {
+	public FieldReference(String owner, String name, String desc) {
 		this.owner = owner;
 		this.name = name;
 		this.desc = desc;

@@ -18,19 +18,19 @@ public class MethodRenameMap {
 	}
 
 	public String get(String owner, String descriptor, String oldName) {
-		return renames.get(new MethodReference(owner, descriptor, oldName));
+		return renames.get(new MethodReference(owner, oldName, descriptor));
 	}
 
 	public String getOrDefault(String owner, String descriptor, String oldName, String defaultValue) {
-		return renames.getOrDefault(new MethodReference(owner, descriptor, oldName), defaultValue);
+		return renames.getOrDefault(new MethodReference(owner, oldName, descriptor), defaultValue);
 	}
 
 	public String optGet(String owner, String descriptor, String oldName) {
-		return renames.getOrDefault(new MethodReference(owner, descriptor, oldName), oldName);
+		return renames.getOrDefault(new MethodReference(owner, oldName, descriptor), oldName);
 	}
 
 	public void put(String owner, String descriptor, String name, String newName) {
-		renames.put(new MethodReference(owner, descriptor, name), newName);
+		renames.put(new MethodReference(owner, name, descriptor), newName);
 	}
 
 	/**
@@ -43,7 +43,7 @@ public class MethodRenameMap {
 	 * @param name The name of the method that should not be remapped
 	 */
 	public void remove(String owner, String desc, String name) {
-		renames.remove(new MethodReference(owner, desc, name));
+		renames.remove(new MethodReference(owner, name, desc));
 	}
 
 	public void putAll(MethodRenameMap other) {
@@ -56,10 +56,10 @@ public class MethodRenameMap {
 	}
 
 	public String[] getLVMappings(String owner, String descriptor, String oldName) {
-		return lvt.get(new MethodReference(owner, descriptor, oldName));
+		return lvt.get(new MethodReference(owner, oldName, descriptor));
 	}
 
 	public void setLVMappings(String owner, String descriptor, String oldName, String[] params) {
-		lvt.put(new MethodReference(owner, descriptor, oldName), params);
+		lvt.put(new MethodReference(owner, oldName, descriptor), params);
 	}
 }

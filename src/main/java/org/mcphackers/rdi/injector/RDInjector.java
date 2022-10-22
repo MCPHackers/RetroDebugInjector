@@ -13,7 +13,7 @@ import org.mcphackers.rdi.injector.data.Generics;
 import org.mcphackers.rdi.injector.data.Mappings;
 import org.mcphackers.rdi.injector.remapper.Remapper;
 import org.mcphackers.rdi.injector.transform.AddGenerics;
-import org.mcphackers.rdi.injector.transform.GuessGenericsFromBridges;
+import org.mcphackers.rdi.injector.transform.GuessGenerics;
 import org.mcphackers.rdi.injector.transform.Injection;
 import org.mcphackers.rdi.injector.transform.Transform;
 import org.mcphackers.rdi.injector.visitors.AccessFixer;
@@ -88,8 +88,18 @@ public class RDInjector implements Injector {
 		return applyMappings(mappings);
 	}
 	
+	public RDInjector applyMappings(Path path, int srcNamespace, int targetNamespace) {
+		Mappings mappings = Mappings.read(path, srcNamespace, targetNamespace);
+		return applyMappings(mappings);
+	}
+	
 	public RDInjector fixInnerClasses() {
 		globalTransform.add(() -> Transform.fixInnerClasses(storage));
+		return this;
+	}
+	
+	public RDInjector restoreSourceFile() {
+		globalTransform.add(() -> Transform.restoreSourceFile(storage));
 		return this;
 	}
 	
@@ -137,7 +147,7 @@ public class RDInjector implements Injector {
 	}
 	
 	public RDInjector guessGenerics() {
-		globalTransform.add(new GuessGenericsFromBridges(storage));
+		globalTransform.add(new GuessGenerics(storage));
 		return this;
 	}
 	

@@ -23,13 +23,13 @@ import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
-import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.LocalVariableNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.ModuleNode;
 import org.objectweb.asm.tree.MultiANewArrayInsnNode;
+import org.objectweb.asm.tree.ParameterNode;
 import org.objectweb.asm.tree.RecordComponentNode;
 import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.TypeInsnNode;
@@ -62,7 +62,7 @@ public final class Remapper {
 	private void createMethodHierarchy() {
 		hierarchisedMethodRenames.clear();
 		Map<String, Set<String>> children = new HashMap<>();
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			List<String> parents = new ArrayList<>(node.interfaces.size() + 1);
 			parents.add(node.superName);
 			parents.addAll(node.interfaces);
@@ -79,7 +79,7 @@ public final class Remapper {
 		boolean modified;
 		do {
 			modified = false;
-			for (ClassNode node : storage.getClasses()) {
+			for (ClassNode node : storage) {
 				Set<String> childNodes = children.get(node.name);
 				if (childNodes == null) {
 					continue;
@@ -92,7 +92,7 @@ public final class Remapper {
 				}
 			}
 		} while (modified);
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			for (MethodNode method : node.methods) {
 				String newName = mappings.methods.get(node.name, method.desc, method.name);
 				String[] params = mappings.methods.getLVMappings(node.name, method.desc, method.name);
@@ -146,7 +146,7 @@ public final class Remapper {
 	private void createFieldHierarchy() {
 		hierarchisedFieldRenames.clear();
 		Map<String, Set<String>> children = new HashMap<>();
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			children.compute(node.superName, (k, v) -> {
 				if (v == null) {
 					v = new HashSet<>();
@@ -158,7 +158,7 @@ public final class Remapper {
 		boolean modified;
 		do {
 			modified = false;
-			for (ClassNode node : storage.getClasses()) {
+			for (ClassNode node : storage) {
 				Set<String> childNodes = children.get(node.name);
 				if (childNodes == null) {
 					continue;
@@ -167,7 +167,7 @@ public final class Remapper {
 				modified |= superChildNodes.addAll(childNodes);
 			}
 		} while (modified);
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			for (FieldNode field : node.fields) {
 				String newName = mappings.fields.get(node.name, field.desc, field.name);
 				if (newName == null) {
@@ -228,7 +228,7 @@ public final class Remapper {
 		createFieldHierarchy();
 
 		IdentityHashMap<ModuleNode, Boolean> remappedModules = new IdentityHashMap<>();
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			for (FieldNode field : node.fields) {
 				remapField(node.name, field, sharedStringBuilder);
 			}
@@ -583,53 +583,31 @@ public final class Remapper {
 				method.signature = sharedStringBuilder.toString();
 			}
 		}
+		boolean isStatic = (method.access & Opcodes.ACC_STATIC) != 0;
+		Type[] paramTypes = Type.getArgumentTypes(method.desc);
+		method.parameters = new ArrayList<>();
 		if(lvMappings != null) {
-			boolean isStatic = (method.access & Opcodes.ACC_STATIC) != 0;
-			LabelNode first = null;
-			LabelNode last = null;
-			AbstractInsnNode insn1 = method.instructions.getFirst();
-			while (insn1 != null) {
-				if(insn1 instanceof LabelNode) {
-					first = (LabelNode)insn1;
-					break;
-				}
-				insn1 = insn1.getNext();
-			}
-			insn1 = method.instructions.getLast();
-			while (insn1 != null) {
-				if(insn1 instanceof LabelNode) {
-					last = (LabelNode)insn1;
-					break;
-				}
-				insn1 = insn1.getPrevious();
-			}
-			if(method.localVariables != null) {
-				Type[] paramTypes = Type.getArgumentTypes(method.desc);
-				for(int i = 0; i < lvMappings.length; i++) {
-					String name = lvMappings[i];
-					if(name == null) continue;
-					boolean foundVar = false;
-					for (LocalVariableNode lvn : method.localVariables) {
-						if(lvn.index == i) {
-							lvn.name = name;
-							foundVar = true;
-							break;
-						}
+			for(int i = 0; i < lvMappings.length; i++) {
+				String name = lvMappings[i];
+				Type type = getParamType(paramTypes, isStatic, i);
+				if(type != null) {
+					if(name == null) {
+						String desc = (type.getSort() == Type.OBJECT || type.getSort() == Type.ARRAY) ? type.getInternalName() : type.getDescriptor();
+						int lastSlash = desc.lastIndexOf('/');
+						name = desc.substring(lastSlash + 1, lastSlash + 2).toLowerCase() + desc.substring(lastSlash + 2) + i;
 					}
-					if(!foundVar) {
-						String desc = getParamDesc(paramTypes, isStatic, i);
-						method.localVariables.add(new LocalVariableNode(name, desc, null, first, last, i));
-					}
+					method.parameters.add(new ParameterNode(name, 0));
 				}
 			}
-			else {
-				Type[] paramTypes = Type.getArgumentTypes(method.desc);
-				method.localVariables = new ArrayList<>();
-				for(int i = 0; i < lvMappings.length; i++) {
-					String name = lvMappings[i];
-					if(name == null) continue;
-					String desc = getParamDesc(paramTypes, isStatic, i);
-					method.localVariables.add(new LocalVariableNode(name, desc, null, first, last, i));
+		} else {
+			int size = Type.getArgumentsAndReturnSizes(method.desc) >> 2;
+			for(int i = 0; i < size; i++) {
+				Type type = getParamType(paramTypes, isStatic, i);
+				if(type != null) {
+					String desc = (type.getSort() == Type.OBJECT || type.getSort() == Type.ARRAY) ? type.getInternalName() : type.getDescriptor();
+					int lastSlash = desc.lastIndexOf('/');
+					String name = desc.substring(lastSlash + 1, lastSlash + 2).toLowerCase() + (desc.length() > 1 ? desc.substring(lastSlash + 2) : "") + i;
+					method.parameters.add(new ParameterNode(name, 0));
 				}
 			}
 		}
@@ -702,11 +680,11 @@ public final class Remapper {
 		}
 	}
 	
-	private String getParamDesc(Type[] parameters, boolean isStatic, int lvIndex) {
+	private Type getParamType(Type[] parameters, boolean isStatic, int lvIndex) {
 		int paramIndex = isStatic ? 0 : 1;
 		for(int i = 0; i < parameters.length; i++) {
 			if(paramIndex == lvIndex) {
-				return parameters[i].getDescriptor();
+				return parameters[i];
 			}
 			paramIndex += parameters[i].getSize();
 		}

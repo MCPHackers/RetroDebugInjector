@@ -57,6 +57,10 @@ public class DescString {
 			return Character.toString(type);
 		}
 	}
+	
+	public static String getReturnType(String desc) {
+		return desc.substring(desc.lastIndexOf(')') + 1);
+	}
 
 	public void reset() {
 		startIndex = 0;

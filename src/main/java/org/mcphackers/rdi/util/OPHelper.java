@@ -98,13 +98,13 @@ public final class OPHelper {
 	public static final boolean isVarStore(int opcode) {
 		switch (opcode) {
 		case Opcodes.ASTORE:
-		//case Opcodes.BLOAD: // bytes & booleans are also regular integers
-		//case Opcodes.CLOAD: // characters are regular integers (?) under the hood
+		//case Opcodes.BSTORE: // bytes & booleans are also regular integers
+		//case Opcodes.CSTORE: // characters are regular integers (?) under the hood
 		case Opcodes.DSTORE:
 		case Opcodes.FSTORE:
 		case Opcodes.ISTORE:
 		case Opcodes.LSTORE:
-		//case Opcodes.SLOAD: // and so are shorts
+		//case Opcodes.SSTORE: // and so are shorts
 			return true;
 		default:
 			return false;

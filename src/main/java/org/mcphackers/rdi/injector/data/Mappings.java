@@ -81,8 +81,78 @@ public class Mappings {
 		}
 		return mappings;
 	}
+
+	public static Mappings read(Path path, int srcNamespace, int targetNamespace) {
+		Mappings mappings = new Mappings();
+		Provider provider = getProvider(path);
+		if(provider == null) {
+			return mappings;
+		}
+		try(BufferedReader br = Files.newBufferedReader(path)) {
+			MemoryMappingTree mappingTree = new MemoryMappingTree();
+			switch (provider) {
+			case TINY1:
+				Tiny1Reader.read(br, mappingTree);
+				break;
+			case TINY2:
+				Tiny2Reader.read(br, mappingTree);
+				break;
+			}
+			for(ClassMapping classMapping : mappingTree.getClasses()) {
+				String className = classMapping.getName(srcNamespace);
+				if(className == null) {
+					className = classMapping.getSrcName();
+				}
+				else if (classMapping.getName(targetNamespace) != null) {
+					mappings.classes.put(classMapping.getName(srcNamespace), classMapping.getName(targetNamespace));
+				}
+				
+				for(FieldMapping fieldMapping : classMapping.getFields()) {
+					if(fieldMapping.getName(srcNamespace) == null || fieldMapping.getName(targetNamespace) == null) {
+						continue;
+					}
+					mappings.fields.put(
+							className,
+							fieldMapping.getDesc(srcNamespace),
+							fieldMapping.getName(srcNamespace),
+							fieldMapping.getName(targetNamespace));
+				}
+				
+				for(MethodMapping methodMapping : classMapping.getMethods()) {
+					if(methodMapping.getName(srcNamespace) == null || methodMapping.getName(targetNamespace) == null) {
+						continue;
+					}
+					mappings.methods.put(
+							className,
+							methodMapping.getDesc(srcNamespace),
+							methodMapping.getName(srcNamespace),
+							methodMapping.getName(targetNamespace));
+					mappings.methods.setLVMappings(
+							className,
+							methodMapping.getDesc(srcNamespace),
+							methodMapping.getName(srcNamespace),
+							getParameterMappings(methodMapping.getArgs(), targetNamespace));
+				}
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return mappings;
+	}
 	
 	private static String[] getParameterMappings(Collection<? extends MethodArgMapping> args, String targetNamespace) {
+		int maxIndex = -1;
+		for(MethodArgMapping mapping : args) {
+			maxIndex = Math.max(mapping.getLvIndex(), maxIndex);
+		}
+		String[] params = new String[maxIndex + 1];
+		for(MethodArgMapping mapping : args) {
+			params[mapping.getLvIndex()] = mapping.getName(targetNamespace);
+		}
+		return params;
+	}
+	
+	private static String[] getParameterMappings(Collection<? extends MethodArgMapping> args, int targetNamespace) {
 		int maxIndex = -1;
 		for(MethodArgMapping mapping : args) {
 			maxIndex = Math.max(mapping.getLvIndex(), maxIndex);

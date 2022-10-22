@@ -2,6 +2,7 @@ package org.mcphackers.rdi.injector.data;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -12,7 +13,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
-public class ClassStorage {
+public class ClassStorage implements Iterable<ClassNode> {
 	
 	private final Map<String, ClassNode> cachedNodes = new HashMap<>();
 	private final List<ClassNode> nodes = new ArrayList<>();
@@ -20,6 +21,11 @@ public class ClassStorage {
 	public ClassStorage(List<ClassNode> classNodes) {
 		nodes.addAll(classNodes);
 		updateCache();
+	}
+
+	@Override
+	public Iterator<ClassNode> iterator() {
+		return nodes.iterator();
 	}
 	
 	public List<ClassNode> getClasses() {
@@ -65,9 +71,7 @@ public class ClassStorage {
 	}
 	
 	public void removeClass(String name) {
-		ClassNode nodeToRemove = cachedNodes.get(name);
-		nodes.remove(nodeToRemove);
-		cachedNodes.remove(nodeToRemove.name);
+		removeClass(cachedNodes.get(name));
 	}
 	
 	public void updateCache() {

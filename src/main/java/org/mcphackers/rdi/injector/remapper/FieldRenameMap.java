@@ -17,19 +17,19 @@ public final class FieldRenameMap {
 	}
 
 	public String get(String owner, String descriptor, String oldName) {
-		return renames.get(new FieldReference(owner, descriptor, oldName));
+		return renames.get(new FieldReference(owner, oldName, descriptor));
 	}
 
 	public String getOrDefault(String owner, String descriptor, String oldName, String defaultValue) {
-		return renames.getOrDefault(new FieldReference(owner, descriptor, oldName), defaultValue);
+		return renames.getOrDefault(new FieldReference(owner, oldName, descriptor), defaultValue);
 	}
 
 	public String optGet(String owner, String descriptor, String oldName) {
-		return renames.getOrDefault(new FieldReference(owner, descriptor, oldName), oldName);
+		return renames.getOrDefault(new FieldReference(owner, oldName, descriptor), oldName);
 	}
 
 	public void put(String owner, String descriptor, String name, String newName) {
-		renames.put(new FieldReference(owner, descriptor, name), newName);
+		renames.put(new FieldReference(owner, name, descriptor), newName);
 	}
 
 	/**

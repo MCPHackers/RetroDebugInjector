@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.mcphackers.rdi.injector.data.Exceptions;
+import org.mcphackers.rdi.util.MethodReference;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
@@ -26,14 +27,12 @@ public class AddExceptions extends ClassVisitor {
 	@Override
 	public void visitMethod(MethodNode node) {
 		if (!node.name.equals("<clinit>")) {
-			node.exceptions = processExceptions(classNode.name, node.name, node.desc, node.exceptions);
+			node.exceptions = processExceptions(new MethodReference(classNode.name, node), node.exceptions);
 		}
 	}
 
-	private List<String> processExceptions(String cls, String name, String desc, List<String> exceptions) {
-		Set<String> set = new HashSet<>();
-		for (String s : context.getExceptions(cls, name, desc))
-			set.add(s);
+	private List<String> processExceptions(MethodReference ref, List<String> exceptions) {
+		Set<String> set = new HashSet<>(context.getExceptions(ref));
 		if (exceptions != null) {
 			for (String s : exceptions)
 				set.add(s);
@@ -41,7 +40,7 @@ public class AddExceptions extends ClassVisitor {
 
 		if (set.size() > (exceptions == null ? 0 : exceptions.size())) {
 			exceptions = set.stream().sorted().collect(Collectors.toList());
-			context.setExceptions(cls, name, desc, exceptions);
+			context.setExceptions(ref, exceptions);
 		}
 
 		return exceptions;

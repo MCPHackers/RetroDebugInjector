@@ -2,6 +2,8 @@ package org.mcphackers.rdi.injector.visitors;
 
 import org.mcphackers.rdi.injector.data.Access;
 import org.mcphackers.rdi.injector.data.Access.Level;
+import org.mcphackers.rdi.util.FieldReference;
+import org.mcphackers.rdi.util.MethodReference;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -28,7 +30,7 @@ public class AccessFixer extends ClassVisitor {
 	@Override
 	public void visitField(FieldNode node) {
 		Level old = Level.getFromBytecode(node.access);
-		Level _new = context.getLevel(classNode.name, node.name);
+		Level _new = context.getLevel(new FieldReference(classNode.name, node));
 		if (_new != null && old != _new) {
 			node.access = _new.setAccess(node.access);
 		}
@@ -37,7 +39,7 @@ public class AccessFixer extends ClassVisitor {
 	@Override
 	public void visitMethod(MethodNode node) {
 		Level old = Level.getFromBytecode(node.access);
-		Level _new = context.getLevel(classNode.name, node.name, node.desc);
+		Level _new = context.getLevel(new MethodReference(classNode.name, node));
 		if (_new != null && old != _new) {
 			node.access = _new.setAccess(node.access);
 		}

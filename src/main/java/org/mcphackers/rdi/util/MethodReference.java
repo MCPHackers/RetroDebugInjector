@@ -13,14 +13,14 @@ public class MethodReference {
 	private final String owner;
 
 	public MethodReference(MethodInsnNode instruction) {
-		this(instruction.owner, instruction.desc, instruction.name);
+		this(instruction.owner, instruction.name, instruction.desc);
 	}
 
 	public MethodReference(String owner, MethodNode node) {
-		this(owner, node.desc, node.name);
+		this(owner, node.name, node.desc);
 	}
 
-	public MethodReference(String owner, String desc, String name) {
+	public MethodReference(String owner, String name, String desc) {
 		this.owner = owner;
 		this.name = name;
 		this.desc = desc;

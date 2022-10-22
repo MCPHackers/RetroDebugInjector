@@ -5,7 +5,7 @@ public class Pair<T, U> {
 	public T left;
 	public U right;
 	
-	public Pair(T val, U val2) {
+	private Pair(T val, U val2) {
 		left = val;
 		right = val2;
 	}
@@ -24,6 +24,20 @@ public class Pair<T, U> {
 	
 	public void setRight(U val) {
 		right = val;
+	}
+	
+	public boolean equals(Object o) {
+		if(o instanceof Pair) {
+			Pair<?,?> pair = (Pair<?,?>)o;
+			boolean leftEqual = left == pair.left || (left != null && left.equals(pair.left));
+			boolean rightEqual = right == pair.right || (right != null && right.equals(pair.right));
+			return leftEqual && rightEqual;
+		}
+		return false;
+	}
+	
+	public static <A, B> Pair<A, B> of(A a, B b) {
+		return new Pair<A, B>(a, b);
 	}
 
 }

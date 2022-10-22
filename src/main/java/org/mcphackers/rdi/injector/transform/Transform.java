@@ -45,14 +45,14 @@ public final class Transform {
 		Map<String, List<InnerClassNode>> parents = new HashMap<>();
 
 		// Initial indexing sweep
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			parents.put(node.name, new ArrayList<>());
 			if (node.superName.equals("java/lang/Enum")) {
 				enums.add(node.name); // Register enum
 			}
 		}
 		// Second sweep
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			// Sweep enum members
 			if (enums.contains(node.superName)) {
 				// Child of (abstract) enum
@@ -162,13 +162,16 @@ public final class Transform {
 						}
 						innerClassNode = new InnerClassNode(node.name, outerNode, innerMost, innerClassAccess);
 					}
-					parents.get(outerNode).add(innerClassNode);
+					List<InnerClassNode> innerNodes = parents.get(outerNode);
+					if(innerNodes != null) {
+						innerNodes.add(innerClassNode);
+					}
 					splitInner.put(node.name, innerClassNode);
 					node.innerClasses.add(innerClassNode);
 				}
 			}
 		}
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			// General sweep
 			Collection<InnerClassNode> innerNodesToAdd = new ArrayList<>();
 			for (FieldNode field : node.fields) {
@@ -240,7 +243,7 @@ public final class Transform {
 		Map<FieldReference, String> deobfNames = new HashMap<>(); // The deobf name will be something like $SwitchMap$org$bukkit$Material
 
 		// index switch map classes - or at least their candidates
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			if (node.superName != null && node.superName.equals("java/lang/Object") && node.interfaces.isEmpty()) {
 				if (node.fields.size() == 1 && node.methods.size() == 1) {
 					MethodNode method = node.methods.get(0);
@@ -301,7 +304,7 @@ public final class Transform {
 		}
 
 		// Rename references to the field
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			Set<String> addedInnerClassNodes = new HashSet<>();
 			for (MethodNode method : node.methods) {
 				AbstractInsnNode instruction = method.instructions.getFirst();
@@ -365,7 +368,7 @@ public final class Transform {
 		// name it is better to use MethodNode instead of String to reduce object allocation overhead.
 		// Should we use triple instead? Perhaps.
 		HashMap<String, Map.Entry<String, MethodNode>> candidates = new LinkedHashMap<>();
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			if ((node.access & Constants.VISIBILITY_MODIFIERS) != 0) {
 				continue; // Anonymous inner classes are always package-private
 			}
@@ -429,7 +432,7 @@ public final class Transform {
 		}
 
 		// Make sure that the constructor is only invoked in a single class, which should be the outer class
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			for (MethodNode method : node.methods) {
 				AbstractInsnNode instruction = method.instructions.getFirst();
 				while (instruction != null) {
@@ -466,7 +469,7 @@ public final class Transform {
 		// In the future I could settle with not checking for the anonymous access flag, but this would
 		// be quite the effort to get around nonetheless since previous steps of this method utilise
 		// this access flag
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			for (FieldNode field : node.fields) {
 				if (field.desc.length() == 1 || (field.access & Opcodes.ACC_SYNTHETIC) != 0) {
 					continue;
@@ -536,7 +539,7 @@ public final class Transform {
 		
 		// Find all invalid access points
 		
-		for(ClassNode node : storage.getClasses()) {
+		for(ClassNode node : storage) {
 			for(FieldNode field : node.fields) {
 				// Checking field type
 				Type type = Type.getType(field.desc);
@@ -605,7 +608,7 @@ public final class Transform {
 						}
 						if(accessLevel == Level.PRIVATE) {
 							if(!node.name.equals(invoke.owner)) {
-								methodAccesses.put(ref, new Pair<>(methodNode, Level.PUBLIC));
+								methodAccesses.put(ref, Pair.of(methodNode, Level.PUBLIC));
 							}
 							continue;
 						}
@@ -620,7 +623,7 @@ public final class Transform {
 								if(isSuper) continue;
 							}
 							if(!ClassStorage.inOnePackage(node.name, invoke.owner)) {
-								methodAccesses.put(ref, new Pair<>(methodNode, Level.PUBLIC));
+								methodAccesses.put(ref, Pair.of(methodNode, Level.PUBLIC));
 							}
 							continue;
 						}
@@ -653,7 +656,7 @@ public final class Transform {
 						}
 						if(accessLevel == Level.PRIVATE) {
 							if(!node.name.equals(field.owner)) {
-								fieldAccesses.put(ref, new Pair<>(fieldNode, Level.PUBLIC));
+								fieldAccesses.put(ref, Pair.of(fieldNode, Level.PUBLIC));
 							}
 							continue;
 						}
@@ -668,7 +671,7 @@ public final class Transform {
 								if(isSuper) continue;
 							}
 							if(!ClassStorage.inOnePackage(node.name, field.owner)) {
-								fieldAccesses.put(ref, new Pair<>(fieldNode, Level.PUBLIC));
+								fieldAccesses.put(ref, Pair.of(fieldNode, Level.PUBLIC));
 							}
 							continue;
 						}
@@ -719,8 +722,19 @@ public final class Transform {
 	 * @param version
 	 */
 	public static void setMajorVersion(ClassStorage storage, int version) {
-		for(ClassNode node : storage.getClasses()) {
+		for(ClassNode node : storage) {
 			node.version = version;
+		}
+	}
+	
+	/**
+	 * Changes sourceFile property of all classes to their name
+	 * @param storage
+	 */
+	public static void restoreSourceFile(ClassStorage storage) {
+		for(ClassNode node : storage) {
+			int slashIndex = node.name.lastIndexOf('/');
+			node.sourceFile = (slashIndex == -1 ? node.name : node.name.substring(slashIndex + 1)) + ".java";
 		}
 	}
 	
@@ -729,11 +743,9 @@ public final class Transform {
 	 * @param storage
 	 */
 	public static void stripLVT(ClassStorage storage) {
-		for(ClassNode node : storage.getClasses()) {
+		for(ClassNode node : storage) {
 			for(MethodNode method : node.methods) {
-				if(method.localVariables != null) {
-					method.localVariables.clear();
-				}
+				method.localVariables = null;
 			}
 		}
 	}
@@ -743,9 +755,8 @@ public final class Transform {
 	 * @param storage
 	 * @param storage2
 	 */
-	//TODO Preserve order
 	public static void merge(ClassStorage storage, ClassStorage storage2) {
-		for(ClassNode node2 : storage2.getClasses()) {
+		for(ClassNode node2 : storage2) {
 			ClassNode node1 = storage.getClass(node2.name);
 			if(node1 == null) {
 				storage.addClass(node2);
@@ -755,18 +766,38 @@ public final class Transform {
 				for(FieldNode field : node1.fields) {
 					fields.add(new FieldReference(node1.name, field));
 				}
-				for(FieldNode field : node2.fields) {
-					if(!fields.contains(new FieldReference(node2.name, field))) {
-						node1.fields.add(field);
+				for(int i = 0; i < node2.fields.size(); i++) {
+					FieldNode field = node2.fields.get(i);
+					FieldReference prevField = i == 0 ? null : new FieldReference(node2.name, node2.fields.get(i - 1));
+					FieldReference fieldRef = new FieldReference(node2.name, field);
+					if(!fields.contains(fieldRef)) {
+						int index = fields.indexOf(prevField);
+						if(prevField == null || index == -1) {
+							node1.fields.add(field);
+							fields.add(fieldRef);
+						} else {
+							node1.fields.add(index + 1, field);
+							fields.add(index + 1, fieldRef);
+						}
 					}
 				}
 				List<MethodReference> methods = new ArrayList<>();
 				for(MethodNode method : node1.methods) {
 					methods.add(new MethodReference(node1.name, method));
 				}
-				for(MethodNode method : node2.methods) {
-					if(!methods.contains(new MethodReference(node2.name, method))) {
-						node1.methods.add(method);
+				for(int i = 0; i < node2.methods.size(); i++) {
+					MethodNode method = node2.methods.get(i);
+					MethodReference prevMethod = i == 0 ? null : new MethodReference(node2.name, node2.methods.get(i - 1));
+					MethodReference methodRef = new MethodReference(node2.name, method);
+					if(!methods.contains(methodRef)) {
+						int index = methods.indexOf(prevMethod);
+						if(prevMethod == null || index == -1) {
+							node1.methods.add(method);
+							methods.add(methodRef);
+						} else {
+							node1.methods.add(index + 1, method);
+							methods.add(index + 1, methodRef);
+						}
 					}
 				}
 			}

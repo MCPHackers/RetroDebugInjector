@@ -23,7 +23,7 @@ public class AddGenerics implements Injection {
 	}
 	
 	public void transform() {
-		for (ClassNode node : storage.getClasses()) {
+		for (ClassNode node : storage) {
 			for(MethodNode method : node.methods) {
 				String sig = context.getMethodSignature(node.name, method.name, method.desc);
 				if(sig != null) {
@@ -40,7 +40,7 @@ public class AddGenerics implements Injection {
 				}
 			}
 		}
-//		for (ClassNode node : storage.getClasses()) {
+//		for (ClassNode node : storage) {
 //			for(MethodNode method : node.methods) {
 //				
 //			}

@@ -57,7 +57,7 @@ public class IOUtil {
 	
 	public static void write(ClassStorage storage, OutputStream out) throws IOException {
 		JarOutputStream jarOut = new JarOutputStream(out);
-		for (ClassNode classNode : storage.getClasses()) {
+		for (ClassNode classNode : storage) {
 			ClassWriter writer = new ClassWriter(0);
 			classNode.accept(writer);
 			jarOut.putNextEntry(new ZipEntry(classNode.name + ".class"));
@@ -77,7 +77,7 @@ public class IOUtil {
 	 */
 	public static void write(ClassStorage storage, OutputStream out, List<Path> resources) throws IOException {
 		try(JarOutputStream jarOut = new JarOutputStream(out)) {
-			for (ClassNode classNode : storage.getClasses()) {
+			for (ClassNode classNode : storage) {
 				ClassWriter writer = new ClassWriter(0);
 				classNode.accept(writer);
 				jarOut.putNextEntry(new ZipEntry(classNode.name + ".class"));
