@@ -751,7 +751,7 @@ public final class Transform {
 	}
 
 	/**
-	 * Adds all missing methods and fields from storage2 to storage
+	 * Adds all missing classes, methods and fields from storage2 to storage
 	 * @param storage
 	 * @param storage2
 	 */
@@ -760,44 +760,71 @@ public final class Transform {
 			ClassNode node1 = storage.getClass(node2.name);
 			if(node1 == null) {
 				storage.addClass(node2);
+				continue;
 			}
-			else {
-				List<FieldReference> fields = new ArrayList<>();
-				for(FieldNode field : node1.fields) {
-					fields.add(new FieldReference(node1.name, field));
-				}
-				for(int i = 0; i < node2.fields.size(); i++) {
-					FieldNode field = node2.fields.get(i);
-					FieldReference prevField = i == 0 ? null : new FieldReference(node2.name, node2.fields.get(i - 1));
-					FieldReference fieldRef = new FieldReference(node2.name, field);
-					if(!fields.contains(fieldRef)) {
-						int index = fields.indexOf(prevField);
-						if(prevField == null || index == -1) {
-							node1.fields.add(field);
-							fields.add(fieldRef);
-						} else {
-							node1.fields.add(index + 1, field);
-							fields.add(index + 1, fieldRef);
-						}
+			for(int i = 0; i < node2.interfaces.size(); i++) {
+				String itf = node2.interfaces.get(i);
+				if(!node1.interfaces.contains(itf)) {
+					int index = -1;
+					int i2 = i - 1;
+					while(i2 >= 0 && index == -1) {
+						index = node1.interfaces.indexOf(node2.interfaces.get(i2));
+						i2--;
+					}
+					if(index == -1) {
+						node1.interfaces.add(itf);
+					} else {
+						node1.interfaces.add(index + 1, itf);
 					}
 				}
-				List<MethodReference> methods = new ArrayList<>();
-				for(MethodNode method : node1.methods) {
-					methods.add(new MethodReference(node1.name, method));
+			}
+			List<FieldReference> fields = new ArrayList<>();
+			for(FieldNode field : node1.fields) {
+				fields.add(new FieldReference(node1.name, field));
+			}
+			for(int i = 0; i < node2.fields.size(); i++) {
+				FieldNode field = node2.fields.get(i);
+				FieldReference fieldRef = new FieldReference(node2.name, field);
+				if(!fields.contains(fieldRef)) {
+					int i2 = i - 1;
+					int index = -1;
+					FieldReference prevField = null;
+					while(i2 >= 0 && index == -1) {
+						index = fields.indexOf(prevField);
+						prevField = new FieldReference(node2.name, node2.fields.get(i2));
+						i2--;
+					}
+					if(index == -1) {
+						node1.fields.add(field);
+						fields.add(fieldRef);
+					} else {
+						node1.fields.add(index + 1, field);
+						fields.add(index + 1, fieldRef);
+					}
 				}
-				for(int i = 0; i < node2.methods.size(); i++) {
-					MethodNode method = node2.methods.get(i);
-					MethodReference prevMethod = i == 0 ? null : new MethodReference(node2.name, node2.methods.get(i - 1));
-					MethodReference methodRef = new MethodReference(node2.name, method);
-					if(!methods.contains(methodRef)) {
-						int index = methods.indexOf(prevMethod);
-						if(prevMethod == null || index == -1) {
-							node1.methods.add(method);
-							methods.add(methodRef);
-						} else {
-							node1.methods.add(index + 1, method);
-							methods.add(index + 1, methodRef);
-						}
+			}
+			List<MethodReference> methods = new ArrayList<>();
+			for(MethodNode method : node1.methods) {
+				methods.add(new MethodReference(node1.name, method));
+			}
+			for(int i = 0; i < node2.methods.size(); i++) {
+				MethodNode method = node2.methods.get(i);
+				MethodReference methodRef = new MethodReference(node2.name, method);
+				if(!methods.contains(methodRef)) {
+					int i2 = i - 1;
+					int index = -1;
+					MethodReference prevMethod = null;
+					while(i2 >= 0 && index == -1) {
+						index = methods.indexOf(prevMethod);
+						prevMethod = new MethodReference(node2.name, node2.methods.get(i2));
+						i2--;
+					}
+					if(index == -1) {
+						node1.methods.add(method);
+						methods.add(methodRef);
+					} else {
+						node1.methods.add(index + 1, method);
+						methods.add(index + 1, methodRef);
 					}
 				}
 			}

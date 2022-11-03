@@ -80,7 +80,8 @@ public class Main {
 			injector.stripLVT();
 		}
 		if(mappings != null) {
-			injector.applyMappings(mappings, 0, 1);
+			//TODO namespace indexes aren't customizable
+			injector.applyMappings(mappings, -1, 0);
 		}
 		if(exceptions != null) {
 			injector.fixExceptions(exceptions);
