@@ -1,106 +1,69 @@
 package org.mcphackers.rdi.util;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
 
-import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.analysis.Analyzer;
-import org.objectweb.asm.tree.analysis.AnalyzerException;
-import org.objectweb.asm.tree.analysis.SourceInterpreter;
-import org.objectweb.asm.tree.analysis.SourceValue;
+import org.objectweb.asm.tree.MethodInsnNode;
 
 public class IdentifyCall {
-    private final InsnList instructions;
-    private final Map<AbstractInsnNode, Set<SourceValue>> sources;
-    private final TreeMap<int[],AbstractInsnNode> conditionals;
-
-    private IdentifyCall(InsnList il,
-            Map<AbstractInsnNode, Set<SourceValue>> s, TreeMap<int[], AbstractInsnNode> c) {
-        instructions = il;
-        sources = s;
-        conditionals = c;
-    }
-
-    public Set<AbstractInsnNode> getAllInputsOf(AbstractInsnNode instr) {
-        Set<AbstractInsnNode> source = new HashSet<>();
-        List<SourceValue> pending = new ArrayList<>(sources.get(instr));
-        for (int pIx = 0; pIx < pending.size(); pIx++) {
-            SourceValue sv = pending.get(pIx);
-            final boolean branch = sv.insns.size() > 1;
-            for(AbstractInsnNode in: sv.insns) {
-                if(source.add(in))
-                    pending.addAll(sources.getOrDefault(in, Collections.emptySet()));
-                if(branch) {
-                    int ix = instructions.indexOf(in);
-                    conditionals.forEach((b,i) -> {
-                        if(b[0] <= ix && b[1] >= ix && source.add(i))
-                            pending.addAll(sources.getOrDefault(i, Collections.emptySet()));
-                    });
-                }
-            }
-        }
-        return source;
-    }
-
-    public static IdentifyCall getInputs(
-        String internalClassName, MethodNode toAnalyze) throws AnalyzerException {
-
-        InsnList instructions = toAnalyze.instructions;
-        Map<AbstractInsnNode, Set<SourceValue>> sources = new HashMap<>();
-        SourceInterpreter i = new SourceInterpreter(Opcodes.ASM9) {
-            @Override
-            public SourceValue unaryOperation(AbstractInsnNode insn, SourceValue value) {
-                sources.computeIfAbsent(insn, x -> new HashSet<>()).add(value);
-                return super.unaryOperation(insn, value);
-            }
-
-            @Override
-            public SourceValue binaryOperation(AbstractInsnNode insn, SourceValue v1, SourceValue v2) {
-                addAll(insn, Arrays.asList(v1, v2));
-                return super.binaryOperation(insn, v1, v2);
-            }
-
-            @Override
-            public SourceValue ternaryOperation(AbstractInsnNode insn, SourceValue v1, SourceValue v2, SourceValue v3) {
-                addAll(insn, Arrays.asList(v1, v2, v3));
-                return super.ternaryOperation(insn, v1, v2, v3);
-            }
-
-            @Override
-            public SourceValue naryOperation(AbstractInsnNode insn, List<? extends SourceValue> values) {
-                addAll(insn, values);
-                return super.naryOperation(insn, values);
-            }
-
-            private void addAll(AbstractInsnNode insn, List<? extends SourceValue> values) {
-                sources.computeIfAbsent(insn, x -> new HashSet<>()).addAll(values);
-            }
-        };
-        TreeMap<int[],AbstractInsnNode> conditionals = new TreeMap<>(
-            Comparator.comparingInt((int[] a) -> a[0]).thenComparingInt(a -> a[1]));
-        Analyzer<SourceValue> analyzer = new Analyzer<SourceValue>(i) {
-            @Override
-            protected void newControlFlowEdge(int insn, int successor) {
-                if(insn != successor - 1) {
-                    AbstractInsnNode instruction = instructions.get(insn);
-                    Set<SourceValue> dep = sources.get(instruction);
-                    if(dep != null && !dep.isEmpty())
-                        conditionals.put(new int[]{ insn, successor }, instruction);
-                }
-            }
-        };
-        analyzer.analyze(internalClassName, toAnalyze);
-        return new IdentifyCall(instructions, sources, conditionals);
-    }
+	protected MethodInsnNode invokeInsn;
+	protected List<AbstractInsnNode[]> arguments;
+	
+	public IdentifyCall(MethodInsnNode invoke) {
+		invokeInsn = invoke;
+		arguments = initArguments();
+	}
+	
+	private List<AbstractInsnNode[]> initArguments() {
+		Type[] argTypes = Type.getArgumentTypes(invokeInsn.desc);
+		List<AbstractInsnNode[]> args = new ArrayList<AbstractInsnNode[]>(argTypes.length);
+		if(argTypes.length == 0) {
+			return Collections.emptyList();
+		}
+		AbstractInsnNode insn = invokeInsn.getPrevious();
+		AbstractInsnNode start = null;
+		AbstractInsnNode end = insn;
+		for(int currentArg = argTypes.length - 1; currentArg >= 0; currentArg--) {
+			int stack = argTypes[currentArg].getSize();
+			end = insn;
+			while(stack > 0) {
+				stack -= OPHelper.getStackSizeDelta(insn);
+				if(stack == 0) {
+					start = insn;
+				}
+				insn = insn.getPrevious();
+			}
+			if(start != null) {
+				while(args.size() <= currentArg) {
+					args.add(null);
+				}
+				args.set(currentArg, range(start, end));
+			}
+		}
+		return args;
+	}
+	
+	public List<AbstractInsnNode[]> getArguments() {
+		return Collections.unmodifiableList(arguments);
+	}
+	
+	public AbstractInsnNode[] getArgument(int index) {
+		return arguments.get(index);
+	}
+	
+	public static AbstractInsnNode[] range(AbstractInsnNode start, AbstractInsnNode end) {
+		List<AbstractInsnNode> list = new LinkedList<>();
+		AbstractInsnNode insn = start;
+		while(insn != end) {
+			list.add(insn);
+			insn = insn.getNext();
+		}
+		list.add(end);
+		AbstractInsnNode[] arr = new AbstractInsnNode[list.size()];
+		return list.toArray(arr);
+	}
 }

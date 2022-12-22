@@ -14,10 +14,12 @@ import java.util.Set;
 
 import org.mcphackers.rdi.injector.data.Access.Level;
 import org.mcphackers.rdi.injector.data.ClassStorage;
-import org.mcphackers.rdi.injector.data.Constants;
+import org.mcphackers.rdi.injector.data.constants.Constant;
+import org.mcphackers.rdi.injector.data.constants.ConstantPool;
 import org.mcphackers.rdi.util.DescString;
 import org.mcphackers.rdi.util.FieldReference;
 import org.mcphackers.rdi.util.MethodReference;
+import org.mcphackers.rdi.util.OPHelper;
 import org.mcphackers.rdi.util.Pair;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -28,13 +30,17 @@ import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 
 /**
  * Class with global transformations to the list of classes
  */
 public final class Transform {
+
+	public static final int VISIBILITY_MODIFIERS = Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED | Opcodes.ACC_PUBLIC;
 	
 	/**
 	 * Guesses the inner classes from class nodes
@@ -369,7 +375,7 @@ public final class Transform {
 		// Should we use triple instead? Perhaps.
 		HashMap<String, Map.Entry<String, MethodNode>> candidates = new LinkedHashMap<>();
 		for (ClassNode node : storage) {
-			if ((node.access & Constants.VISIBILITY_MODIFIERS) != 0) {
+			if ((node.access & VISIBILITY_MODIFIERS) != 0) {
 				continue; // Anonymous inner classes are always package-private
 			}
 			boolean skipClass = false;
@@ -377,7 +383,7 @@ public final class Transform {
 			for (FieldNode field : node.fields) {
 				final int requiredFlags = Opcodes.ACC_SYNTHETIC | Opcodes.ACC_FINAL;
 				if ((field.access & requiredFlags) == requiredFlags
-						&& (field.access & Constants.VISIBILITY_MODIFIERS) == 0) {
+						&& (field.access & VISIBILITY_MODIFIERS) == 0) {
 					if (outerClassReference != null) {
 						skipClass = true;
 						break; // short-circuit
@@ -398,7 +404,7 @@ public final class Transform {
 						skipClass = true;
 						break; // short-circuit
 					}
-					if ((method.access & Constants.VISIBILITY_MODIFIERS) != 0) {
+					if ((method.access & VISIBILITY_MODIFIERS) != 0) {
 						// The constructor should be package - protected
 						skipClass = true;
 						break;
@@ -713,6 +719,108 @@ public final class Transform {
 			Level level = pair.getRight();
 			
 			node.access = level.setAccess(node.access);
+		}
+	}
+
+	public static void decomposeVars(ClassStorage storage) {
+		for(ClassNode node : storage) {
+			for(MethodNode method : node.methods) {
+				AbstractInsnNode insn = method.instructions.getFirst();
+				while(insn != null) {
+					int opcode = insn.getOpcode();
+					if(opcode == Opcodes.DUP || opcode == Opcodes.DUP2) {
+						AbstractInsnNode insn2 = insn.getNext();
+						if(insn2 != null && OPHelper.isVarStore(insn2.getOpcode())
+								&& ((insn2.getOpcode() == Opcodes.DSTORE || insn2.getOpcode() == Opcodes.LSTORE) && opcode == Opcodes.DUP2
+								|| opcode == Opcodes.DUP)) {
+							VarInsnNode astore = (VarInsnNode)insn2;
+							method.instructions.insert(insn2, new VarInsnNode(OPHelper.reverseVarOpcode(astore.getOpcode()), astore.var));
+							method.instructions.remove(insn);
+							insn = insn2;
+						}
+					}
+					insn = insn.getNext();
+				}
+			}
+		}
+	}
+	
+	public static void removeVarSelfAssignment(ClassStorage storage) {
+		for(ClassNode node : storage) {
+			for(MethodNode method : node.methods) {
+				AbstractInsnNode insn = method.instructions.getFirst();
+				while(insn != null) {
+					if(OPHelper.isVarLoad(insn.getOpcode())) {
+						AbstractInsnNode insn2 = insn.getNext();
+						if(insn2 != null && OPHelper.isVarStore(insn2.getOpcode())) {
+							VarInsnNode aload = (VarInsnNode)insn;
+							VarInsnNode astore = (VarInsnNode)insn2;
+							AbstractInsnNode next = insn2.getNext();
+							if(aload.var == astore.var) {
+								method.instructions.remove(insn);
+								method.instructions.remove(insn2);
+								insn = next;
+								continue;
+							}
+						}
+					}
+					insn = insn.getNext();
+				}
+			}
+		}
+	}
+	
+	public static void test(ClassStorage storage) {
+		for(ClassNode node : storage) {
+			if(node.name.endsWith("Floor1") || node.name.endsWith("Floor0") || node.name.endsWith("Lookup") || node.name.endsWith("Drft") || node.name.endsWith("Lsp")) {
+				continue;
+			}
+			for(MethodNode method : node.methods) {
+				AbstractInsnNode insn = method.instructions.getFirst();
+				while(insn != null) {
+					if(insn.getOpcode() == Opcodes.LDC) {
+						LdcInsnNode ldc = (LdcInsnNode)insn;
+						if(ldc.cst instanceof Double) {
+							double cstDouble = (double)ldc.cst;
+							String d = Double.toString(cstDouble);
+							if(d.length() - d.indexOf('.') > 5) {
+								System.out.println(node.name + " " + method.name + method.desc);
+								System.out.println(d +"D");
+							}
+						}
+						else if(ldc.cst instanceof Float) {
+							float cstFloat = (float)ldc.cst;
+							String f = Float.toString(cstFloat);
+							if(f.length() - f.indexOf('.') > 5) {
+								System.out.println(node.name + " " + method.name + method.desc);
+								System.out.println(f+"F");
+							}
+						}
+					}
+					insn = insn.getNext();
+				}
+			}
+		}
+	}
+	
+	public static void replaceCommonConstants(ClassStorage storage) {
+		for(ClassNode node : storage) {
+			for(MethodNode method : node.methods) {
+				AbstractInsnNode insn = method.instructions.getFirst();
+				nextInsn:
+				while(insn != null) {
+					if(insn.getOpcode() == Opcodes.LDC || insn.getOpcode() == Opcodes.SIPUSH) {
+						AbstractInsnNode next = insn.getNext();
+						for(Constant constantReplacer : ConstantPool.CONSTANTS) {
+							if(constantReplacer.replace(method.instructions, insn)) {
+								insn = next;
+								continue nextInsn;
+							}
+						}
+					}
+					insn = insn.getNext();
+				}
+			}
 		}
 	}
 	

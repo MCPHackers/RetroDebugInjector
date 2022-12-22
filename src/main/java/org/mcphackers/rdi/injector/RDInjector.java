@@ -9,10 +9,8 @@ import java.util.List;
 import org.mcphackers.rdi.injector.data.Access;
 import org.mcphackers.rdi.injector.data.ClassStorage;
 import org.mcphackers.rdi.injector.data.Exceptions;
-import org.mcphackers.rdi.injector.data.Generics;
 import org.mcphackers.rdi.injector.data.Mappings;
 import org.mcphackers.rdi.injector.remapper.Remapper;
-import org.mcphackers.rdi.injector.transform.AddGenerics;
 import org.mcphackers.rdi.injector.transform.GuessGenerics;
 import org.mcphackers.rdi.injector.transform.Injection;
 import org.mcphackers.rdi.injector.transform.Transform;
@@ -21,7 +19,9 @@ import org.mcphackers.rdi.injector.visitors.AddExceptions;
 import org.mcphackers.rdi.injector.visitors.ClassInitAdder;
 import org.mcphackers.rdi.injector.visitors.ClassVisitor;
 import org.mcphackers.rdi.injector.visitors.FixParameterLVT;
+import org.mcphackers.rdi.util.ClassStorageWriter;
 import org.mcphackers.rdi.util.IOUtil;
+import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
 public class RDInjector implements Injector {
@@ -59,13 +59,18 @@ public class RDInjector implements Injector {
 		return storage;
 	}
 	
+	public void write(Path path, int flags) throws IOException {
+		ClassStorageWriter writer = new ClassStorageWriter(getStorage(), flags);
+		writer.write(Files.newOutputStream(path), resourcesPath);
+	}
+	
 	public void write(Path path) throws IOException {
-		IOUtil.write(getStorage(), Files.newOutputStream(path), resourcesPath);
+		write(path, ClassWriter.COMPUTE_MAXS);
 	}
 
 	public void transform() {
 		for(Injection transform : globalTransform) {
-			transform.transform();
+			transform.transform(storage);
 		}
 		if(visitorStack != null) {
 			visitorStack.visit(storage.getClasses());
@@ -79,7 +84,7 @@ public class RDInjector implements Injector {
 	}
 	
 	public RDInjector applyMappings(Mappings mappings) {
-		globalTransform.add(() -> new Remapper().load(storage).load(mappings).process());
+		globalTransform.add(storage -> new Remapper().load(storage).load(mappings).process());
 		return this;
 	}
 	
@@ -94,55 +99,49 @@ public class RDInjector implements Injector {
 	}
 	
 	public RDInjector fixInnerClasses() {
-		globalTransform.add(() -> Transform.fixInnerClasses(storage));
+		globalTransform.add(storage -> Transform.fixInnerClasses(storage));
 		return this;
 	}
 	
 	public RDInjector restoreSourceFile() {
-		globalTransform.add(() -> Transform.restoreSourceFile(storage));
+		globalTransform.add(storage -> Transform.restoreSourceFile(storage));
 		return this;
 	}
 	
 	public RDInjector fixAccess() {
-		globalTransform.add(() -> Transform.fixAccess(storage));
+		globalTransform.add(storage -> Transform.fixAccess(storage));
 		return this;
 	}
 	
 	public RDInjector setMajorVersion(int version) {
-		globalTransform.add(() -> Transform.setMajorVersion(storage, version));
+		globalTransform.add(storage -> Transform.setMajorVersion(storage, version));
 		return this;
 	}
 	
 	public RDInjector stripLVT() {
-		globalTransform.add(() -> Transform.stripLVT(storage));
+		globalTransform.add(storage -> Transform.stripLVT(storage));
 		return this;
 	}
 	
 	@Deprecated
 	public RDInjector fixSwitchMaps() {
-		globalTransform.add(() -> Transform.fixSwitchMaps(storage));
+		globalTransform.add(storage -> Transform.fixSwitchMaps(storage));
 		return this;
 	}
 	
 	public RDInjector guessAnonymousInnerClasses() {
-		globalTransform.add(() -> Transform.guessAnonymousInnerClasses(storage));
+		globalTransform.add(storage -> Transform.guessAnonymousInnerClasses(storage));
 		return this;
 	}
 	
 	public RDInjector mergeWith(Path path) {
 		ClassStorage storage2 = new ClassStorage(IOUtil.read(path));
-		globalTransform.add(() -> Transform.merge(storage, storage2));
+		globalTransform.add(storage -> Transform.merge(storage, storage2));
 		return this;
 	}
 	
 	public RDInjector mergeWith(ClassStorage storage2) {
-		globalTransform.add(() -> Transform.merge(storage, storage2));
-		return this;
-	}
-	
-	public RDInjector addGenerics(Path path) {
-		Generics generics = new Generics(path);
-		globalTransform.add(new AddGenerics(storage, generics));
+		globalTransform.add(storage -> Transform.merge(storage, storage2));
 		return this;
 	}
 	
@@ -170,6 +169,11 @@ public class RDInjector implements Injector {
 	public RDInjector fixAccess(Path path) {
 		Access access = new Access(path);
 		visitorStack = new AccessFixer(access, visitorStack);
+		return this;
+	}
+
+	public RDInjector addTransform(Injection transform) {
+		globalTransform.add(transform);
 		return this;
 	}
 }

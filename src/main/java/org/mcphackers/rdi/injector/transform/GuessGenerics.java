@@ -24,8 +24,7 @@ import org.objectweb.asm.tree.VarInsnNode;
 
 public class GuessGenerics implements Injection {
 	
-	private final ClassStorage storage;
-
+	private ClassStorage storage;
 	private ClassTree classTree;
 	private MethodRenameMap renameMap = new MethodRenameMap();
 
@@ -34,7 +33,8 @@ public class GuessGenerics implements Injection {
 	}
 
 	@Override
-	public void transform() {
+	public void transform(ClassStorage classStorage) {
+		storage = classStorage;
 		findBridges();
 		verifyIndexes();
 		List<String> interfaces = new ArrayList<>();
