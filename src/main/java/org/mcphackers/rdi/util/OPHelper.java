@@ -9,9 +9,6 @@ import static org.objectweb.asm.Opcodes.*;
 
 import org.objectweb.asm.Type;
 
-/**
- * Opcode categorisation utility tool.
- */
 public final class OPHelper {
 	
 	private static final int[] STACK_SIZE_DELTA = new int[0xFF];

@@ -61,16 +61,16 @@ public class InsnConstant<T> extends Constant {
 	
 	protected Object getNegative(T value) {
 		if(value instanceof Integer) {
-			return -(int)value;
+			return -(Integer)value;
 		}
 		if(value instanceof Long) {
-			return -(long)value;
+			return -(Long)value;
 		}
 		if(value instanceof Float) {
-			return -(float)value;
+			return -(Float)value;
 		}
 		if(value instanceof Double) {
-			return -(double)value;
+			return -(Double)value;
 		}
 		return null;
 	}
