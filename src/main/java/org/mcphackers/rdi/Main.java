@@ -82,31 +82,31 @@ public class Main {
 		if (inputJarFile == null || outputJarFile == null) return;
 
 		// Transform classes
-		RDInjector injector = new RDInjector(inputJarFile);
-		if(params.contains("striplvt")) {
-			injector.stripLVT();
-		}
-		if(mappings != null) {
-			injector.applyMappings(mappings, sourceNamespace, targetNamespace);
-		}
-		if(exceptions != null) {
-			injector.fixExceptions(exceptions);
-		}
-		if(params.contains("fixinner")) {
-			injector.fixInnerClasses();
-		}
-		if(params.contains("guessgenerics")) {
-			injector.guessGenerics();
-		}
-		if(params.contains("restoresource")) {
-			injector.restoreSourceFile();
-		}
-		injector.addTransform(storage -> Transform.decomposeVars(storage));
-		injector.addTransform(storage -> Transform.test(storage));
-		injector.transform();
-
-		// Export classes
 		try {
+			RDInjector injector = new RDInjector(inputJarFile);
+			if(params.contains("striplvt")) {
+				injector.stripLVT();
+			}
+			if(mappings != null) {
+				injector.applyMappings(mappings, sourceNamespace, targetNamespace);
+			}
+			if(exceptions != null) {
+				injector.fixExceptions(exceptions);
+			}
+			if(params.contains("fixinner")) {
+				injector.fixInnerClasses();
+			}
+			if(params.contains("guessgenerics")) {
+				injector.guessGenerics();
+			}
+			if(params.contains("restoresource")) {
+				injector.restoreSourceFile();
+			}
+			injector.addTransform(storage -> Transform.decomposeVars(storage));
+			injector.addTransform(storage -> Transform.test(storage));
+			injector.transform();
+
+			// Export classes
 			injector.write(outputJarFile, ClassWriter.COMPUTE_MAXS);
 		} catch (IOException e) {
 			throw new RuntimeException(e);

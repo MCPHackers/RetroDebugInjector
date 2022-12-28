@@ -34,8 +34,16 @@ public class RDInjector implements Injector {
 	public RDInjector() {
 	}
 	
-	public RDInjector(Path path) {
-		setStorage(new ClassStorage(IOUtil.read(path)));
+	public RDInjector(Path path) throws IOException {
+		List<ClassNode> nodes;
+		if(Files.isDirectory(path)) {
+			nodes = IOUtil.readDirectory(path);
+		} else if (Files.isRegularFile(path)) {
+			nodes = IOUtil.readJar(path);
+		} else {
+			return;
+		}
+		setStorage(new ClassStorage(nodes));
 		addResources(path);
 	}
 	public RDInjector(List<ClassNode> nodes) {
@@ -131,12 +139,6 @@ public class RDInjector implements Injector {
 	
 	public RDInjector guessAnonymousInnerClasses() {
 		globalTransform.add(storage -> Transform.guessAnonymousInnerClasses(storage));
-		return this;
-	}
-	
-	public RDInjector mergeWith(Path path) {
-		ClassStorage storage2 = new ClassStorage(IOUtil.read(path));
-		globalTransform.add(storage -> Transform.merge(storage, storage2));
 		return this;
 	}
 	
