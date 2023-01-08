@@ -53,9 +53,9 @@ public class GuessGenerics implements Injection {
 			return;
 		List<String> generics = treeNode.generics.get(node.superName);
 		String interfacesDesc = getInterfacesSig(node.interfaces, treeNode.generics);
-		node.version = Math.max(50 /*JAVA 6*/, node.version);
+		node.version = Math.max(Opcodes.V1_6, node.version);
 		if(treeNode.hasParent()) {
-			treeNode.parent.classNode.version = Math.max(50, treeNode.parent.classNode.version);
+			treeNode.parent.classNode.version = Math.max(Opcodes.V1_6, treeNode.parent.classNode.version);
 		}
 		if(treeNode.hasParent() && treeNode.hasChildren()) {
 			if(bridges != null) {

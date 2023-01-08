@@ -244,7 +244,6 @@ public final class Transform {
 	 *
 	 * @return The amount of classes who were identified as switch maps.
 	 */
-	//FIXME SyntheticClass1 ???
 	public static int fixSwitchMaps(ClassStorage storage) {
 		Map<FieldReference, String> deobfNames = new HashMap<>(); // The deobf name will be something like $SwitchMap$org$bukkit$Material
 
@@ -781,7 +780,7 @@ public final class Transform {
 					if(insn.getOpcode() == Opcodes.LDC) {
 						LdcInsnNode ldc = (LdcInsnNode)insn;
 						if(ldc.cst instanceof Double) {
-							double cstDouble = (double)ldc.cst;
+							double cstDouble = (Double)ldc.cst;
 							String d = Double.toString(cstDouble);
 							if(d.length() - d.indexOf('.') > 5) {
 								System.out.println(node.name + " " + method.name + method.desc);
@@ -789,7 +788,7 @@ public final class Transform {
 							}
 						}
 						else if(ldc.cst instanceof Float) {
-							float cstFloat = (float)ldc.cst;
+							float cstFloat = (Float)ldc.cst;
 							String f = Float.toString(cstFloat);
 							if(f.length() - f.indexOf('.') > 5) {
 								System.out.println(node.name + " " + method.name + method.desc);

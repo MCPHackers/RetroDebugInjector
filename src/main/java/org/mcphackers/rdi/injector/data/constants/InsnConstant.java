@@ -92,7 +92,7 @@ public class InsnConstant<T> extends Constant {
 	}
 
 	@Override
-	public Constant copy() {
+	public InsnConstant<T> copy() {
 		return new InsnConstant<T>(InsnHelper.clone(insnList), value);
 	}
 

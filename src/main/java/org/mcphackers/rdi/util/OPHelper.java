@@ -172,6 +172,7 @@ public final class OPHelper {
 		STACK_SIZE_DELTA[IFNULL] = -1;
 		STACK_SIZE_DELTA[IFNONNULL] = -1;
 	}
+
 	public static final int getStackSizeDelta(AbstractInsnNode insn) {
 		int opcode = insn.getOpcode();
 		if(opcode == -1) {
@@ -206,6 +207,16 @@ public final class OPHelper {
 			return STACK_SIZE_DELTA[opcode];
 		}
 		throw new IllegalArgumentException("Could not get stack size delta for " + opcode);
+	}
+
+	public static boolean isReturn(int opcode) {
+		return
+		opcode == RETURN  ||
+		opcode == IRETURN ||
+		opcode == LRETURN ||
+		opcode == FRETURN ||
+		opcode == DRETURN ||
+		opcode == ARETURN;
 	}
 
 	public static final boolean isArrayLoad(int opcode) {

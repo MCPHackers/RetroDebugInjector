@@ -17,7 +17,7 @@ import org.objectweb.asm.tree.ClassNode;
 public class IOUtil {
 
 	public static List<ClassNode> readJar(Path path) throws IOException {
-		List<ClassNode> nodes = new ArrayList<>();
+		final List<ClassNode> nodes = new ArrayList<>();
 		try (ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(path))) {
 			ZipEntry zipEntry;
 			while ((zipEntry = zipInputStream.getNextEntry()) != null) {
@@ -33,7 +33,7 @@ public class IOUtil {
 	}
 	
 	public static List<ClassNode> readDirectory(Path path) throws IOException {
-		List<ClassNode> classes = new ArrayList<>();
+		final List<ClassNode> classes = new ArrayList<>();
 		Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {

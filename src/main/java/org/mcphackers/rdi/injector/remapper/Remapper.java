@@ -234,6 +234,10 @@ public final class Remapper {
 			}
 			for (InnerClassNode innerClass : node.innerClasses) {
 				// TODO: Should we also remap the inner names?
+//				String newInnerName = mappings.classes.get(innerClass.innerName);
+//				if (newInnerName != null) {
+//					innerClass.innerName = newInnerName;
+//				}
 				String newOuterName = mappings.classes.get(innerClass.outerName);
 				if (newOuterName != null) {
 					innerClass.outerName = newOuterName;
