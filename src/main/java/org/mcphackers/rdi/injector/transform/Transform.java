@@ -856,6 +856,17 @@ public final class Transform {
 			}
 		}
 	}
+	
+	public static void stripSignatures(ClassStorage storage) {
+		for(ClassNode node : storage) {
+			for(MethodNode method : node.methods) {
+				method.signature = null;
+			}
+			for(FieldNode field : node.fields) {
+				field.signature = null;
+			}
+		}
+	}
 
 	/**
 	 * Adds all missing classes, methods and fields from storage2 to storage
