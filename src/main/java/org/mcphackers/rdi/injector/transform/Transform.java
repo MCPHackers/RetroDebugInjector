@@ -859,6 +859,7 @@ public final class Transform {
 	
 	public static void stripSignatures(ClassStorage storage) {
 		for(ClassNode node : storage) {
+			node.signature = null;
 			for(MethodNode method : node.methods) {
 				method.signature = null;
 			}
