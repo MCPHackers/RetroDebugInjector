@@ -1,9 +1,10 @@
 package org.mcphackers.rdi.injector.visitors;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.mcphackers.rdi.injector.data.Exceptions;
 import org.mcphackers.rdi.util.MethodReference;
@@ -32,17 +33,16 @@ public class AddExceptions extends ClassVisitor {
 	}
 
 	private List<String> processExceptions(MethodReference ref, List<String> exceptions) {
-		Set<String> set = new HashSet<>(context.getExceptions(ref));
+		Set<String> set = new HashSet<String>(context.getExceptions(ref));
 		if (exceptions != null) {
-			for (String s : exceptions)
-				set.add(s);
+			set.addAll(exceptions);
 		}
 
 		if (set.size() > (exceptions == null ? 0 : exceptions.size())) {
-			exceptions = set.stream().sorted().collect(Collectors.toList());
+			exceptions = new ArrayList<String>(set);
+			Collections.sort(exceptions);
 			context.setExceptions(ref, exceptions);
 		}
-
 		return exceptions;
 	}
 }

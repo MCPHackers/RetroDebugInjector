@@ -79,7 +79,7 @@ public class Main {
 			}
 		}
 
-		if (inputJarFile == null || outputJarFile == null) return;
+		if (inputJarFile == null) return;
 
 		// Transform classes
 		try {
@@ -103,15 +103,17 @@ public class Main {
 				injector.restoreSourceFile();
 			}
 			injector.addTransform(storage -> Transform.decomposeVars(storage));
-			injector.addTransform(storage -> Transform.test(storage));
+			injector.addTransform(storage -> Transform.fixTryCatchRange(storage));
 			injector.transform();
 
 			// Export classes
-			injector.write(outputJarFile, ClassWriter.COMPUTE_MAXS);
+			if(outputJarFile != null) {
+				injector.write(outputJarFile, ClassWriter.COMPUTE_MAXS);
+				Instant endTime = Instant.now();
+				System.out.println("Adding debug information took: " + Duration.between(startTime, endTime).get(ChronoUnit.NANOS) / 1E+9 + "s");
+			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
-		Instant endTime = Instant.now();
-		System.out.println("Adding debug information took: " + Duration.between(startTime, endTime).get(ChronoUnit.NANOS) / 1E+9 + "s");
 	}
 }

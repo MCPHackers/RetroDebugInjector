@@ -25,7 +25,7 @@ public class ClassInitAdder extends ClassVisitor {
 	@Override
 	public void visitClass(ClassNode node) {
 		String superName = node.superName;
-		List<String> constructors = new ArrayList<>();
+		List<String> constructors = new ArrayList<String>();
 		for(MethodNode method : node.methods) {
 			if("<init>".equals(method.name)) {
 				constructors.add(method.desc);

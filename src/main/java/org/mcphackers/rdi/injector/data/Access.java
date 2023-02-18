@@ -3,6 +3,7 @@ package org.mcphackers.rdi.injector.data;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_PROTECTED;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
+import static org.mcphackers.rdi.injector.transform.Transform.VISIBILITY_MODIFIERS;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,7 +30,7 @@ public class Access {
 		}
 
 		public int setAccess(int acc) {
-			acc &= ~(ACC_PRIVATE | ACC_PROTECTED | ACC_PUBLIC);
+			acc &= ~(VISIBILITY_MODIFIERS);
 			acc |= this == PRIVATE ? ACC_PRIVATE : 0;
 			acc |= this == PROTECTED ? ACC_PROTECTED : 0;
 			acc |= this == PUBLIC ? ACC_PUBLIC : 0;

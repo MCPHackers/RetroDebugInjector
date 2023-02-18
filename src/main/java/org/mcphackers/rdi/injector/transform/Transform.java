@@ -18,6 +18,7 @@ import org.mcphackers.rdi.injector.data.constants.Constant;
 import org.mcphackers.rdi.injector.data.constants.ConstantPool;
 import org.mcphackers.rdi.util.DescString;
 import org.mcphackers.rdi.util.FieldReference;
+import org.mcphackers.rdi.util.InsnHelper;
 import org.mcphackers.rdi.util.MethodReference;
 import org.mcphackers.rdi.util.OPHelper;
 import org.mcphackers.rdi.util.Pair;
@@ -29,10 +30,12 @@ import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InnerClassNode;
+import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 /**
@@ -245,7 +248,7 @@ public final class Transform {
 	 * @return The amount of classes who were identified as switch maps.
 	 */
 	public static int fixSwitchMaps(ClassStorage storage) {
-		Map<FieldReference, String> deobfNames = new HashMap<>(); // The deobf name will be something like $SwitchMap$org$bukkit$Material
+		Map<FieldReference, String> deobfNames = new HashMap<FieldReference, String>(); // The deobf name will be something like $SwitchMap$org$bukkit$Material
 
 		// index switch map classes - or at least their candidates
 		for (ClassNode node : storage) {
@@ -310,7 +313,7 @@ public final class Transform {
 
 		// Rename references to the field
 		for (ClassNode node : storage) {
-			Set<String> addedInnerClassNodes = new HashSet<>();
+			Set<String> addedInnerClassNodes = new HashSet<String>();
 			for (MethodNode method : node.methods) {
 				AbstractInsnNode instruction = method.instructions.getFirst();
 				while (instruction != null) {
@@ -372,7 +375,7 @@ public final class Transform {
 		// I am well aware that we are using method node, but given that there can be multiple methods with the same
 		// name it is better to use MethodNode instead of String to reduce object allocation overhead.
 		// Should we use triple instead? Perhaps.
-		HashMap<String, Map.Entry<String, MethodNode>> candidates = new LinkedHashMap<>();
+		HashMap<String, Map.Entry<String, MethodNode>> candidates = new LinkedHashMap<String, Map.Entry<String, MethodNode>>();
 		for (ClassNode node : storage) {
 			if ((node.access & VISIBILITY_MODIFIERS) != 0) {
 				continue; // Anonymous inner classes are always package-private
@@ -538,9 +541,9 @@ public final class Transform {
 	}
 	
 	public static void fixAccess(ClassStorage storage) {
-		Map<String, Level> classAccesses = new HashMap<>();
-		Map<FieldReference, Pair<FieldNode, Level>> fieldAccesses = new HashMap<>();
-		Map<MethodReference, Pair<MethodNode, Level>> methodAccesses = new HashMap<>();
+		Map<String, Level> classAccesses = new HashMap<String, Level>();
+		Map<FieldReference, Pair<FieldNode, Level>> fieldAccesses = new HashMap<FieldReference, Pair<FieldNode, Level>>();
+		Map<MethodReference, Pair<MethodNode, Level>> methodAccesses = new HashMap<MethodReference, Pair<MethodNode, Level>>();
 		
 		// Find all invalid access points
 		
@@ -564,7 +567,7 @@ public final class Transform {
 			}
 			for(MethodNode method : node.methods) {
 				// Checking method argument and return types
-				List<Type> types = new ArrayList<>();
+				List<Type> types = new ArrayList<Type>();
 				types.addAll(Arrays.asList(Type.getArgumentTypes(method.desc)));
 				types.add(Type.getReturnType(method.desc));
 				for(Type type : types) {
@@ -769,38 +772,38 @@ public final class Transform {
 		}
 	}
 	
-	public static void test(ClassStorage storage) {
-		for(ClassNode node : storage) {
-			if(node.name.endsWith("Floor1") || node.name.endsWith("Floor0") || node.name.endsWith("Lookup") || node.name.endsWith("Drft") || node.name.endsWith("Lsp")) {
-				continue;
-			}
-			for(MethodNode method : node.methods) {
-				AbstractInsnNode insn = method.instructions.getFirst();
-				while(insn != null) {
-					if(insn.getOpcode() == Opcodes.LDC) {
-						LdcInsnNode ldc = (LdcInsnNode)insn;
-						if(ldc.cst instanceof Double) {
-							double cstDouble = (Double)ldc.cst;
-							String d = Double.toString(cstDouble);
-							if(d.length() - d.indexOf('.') > 5) {
-								System.out.println(node.name + " " + method.name + method.desc);
-								System.out.println(d +"D");
-							}
-						}
-						else if(ldc.cst instanceof Float) {
-							float cstFloat = (Float)ldc.cst;
-							String f = Float.toString(cstFloat);
-							if(f.length() - f.indexOf('.') > 5) {
-								System.out.println(node.name + " " + method.name + method.desc);
-								System.out.println(f+"F");
-							}
-						}
-					}
-					insn = insn.getNext();
-				}
-			}
-		}
-	}
+//	public static void test(ClassStorage storage) {
+//		for(ClassNode node : storage) {
+//			if(node.name.endsWith("Floor1") || node.name.endsWith("Floor0") || node.name.endsWith("Lookup") || node.name.endsWith("Drft") || node.name.endsWith("Lsp")) {
+//				continue;
+//			}
+//			for(MethodNode method : node.methods) {
+//				AbstractInsnNode insn = method.instructions.getFirst();
+//				while(insn != null) {
+//					if(insn.getOpcode() == Opcodes.LDC) {
+//						LdcInsnNode ldc = (LdcInsnNode)insn;
+//						if(ldc.cst instanceof Double) {
+//							double cstDouble = (Double)ldc.cst;
+//							String d = Double.toString(cstDouble);
+//							if(d.length() - d.indexOf('.') > 5) {
+//								System.out.println(node.name + " " + method.name + method.desc);
+//								System.out.println(d +"D");
+//							}
+//						}
+//						else if(ldc.cst instanceof Float) {
+//							float cstFloat = (Float)ldc.cst;
+//							String f = Float.toString(cstFloat);
+//							if(f.length() - f.indexOf('.') > 5) {
+//								System.out.println(node.name + " " + method.name + method.desc);
+//								System.out.println(f+"F");
+//							}
+//						}
+//					}
+//					insn = insn.getNext();
+//				}
+//			}
+//		}
+//	}
 	
 	public static void replaceCommonConstants(ClassStorage storage) {
 		for(ClassNode node : storage) {
@@ -856,6 +859,53 @@ public final class Transform {
 			}
 		}
 	}
+
+	public static final void fixTryCatchRange(ClassStorage storage) {
+		for(ClassNode node : storage) {
+			for(MethodNode m : node.methods) {
+				List<LabelNode> tryCatchStarts = new ArrayList<LabelNode>();
+				for(TryCatchBlockNode tryCatch : m.tryCatchBlocks) {
+					tryCatchStarts.add(tryCatch.start);
+				}
+				List<Pair<Integer, TryCatchBlockNode>> tryBlocks = new ArrayList<Pair<Integer, TryCatchBlockNode>>();
+				for(TryCatchBlockNode tryCatch : m.tryCatchBlocks) {
+					nextInsn:
+					for(AbstractInsnNode insn = tryCatch.start; insn != null && insn != tryCatch.end; insn = insn.getNext()) {
+						if(insn.getType() != AbstractInsnNode.JUMP_INSN) {
+							continue;
+						}
+						JumpInsnNode jmp = (JumpInsnNode)insn;
+						if(jmp.label == tryCatch.end) {
+							continue;
+						}
+						if(tryCatchStarts.contains(jmp.label)) {
+							continue;
+						}
+						if(OPHelper.isReturn(InsnHelper.nextInsn(jmp.label).getOpcode())) {
+							continue;
+						}
+						for(AbstractInsnNode insn2 = tryCatch.start; insn2 != tryCatch.end; insn2 = insn2.getNext()) {
+							if(jmp.label == insn2) {
+								continue nextInsn;
+							}
+						}
+						System.out.println("Found a bad try catch in " + node.name + "." + m.name + m.desc + " at index " + m.tryCatchBlocks.indexOf(tryCatch));
+						for(AbstractInsnNode insn2 = jmp.label; insn2 != null; insn2 = insn2.getNext()) {
+							if(OPHelper.isReturn(insn2.getOpcode()) || insn2.getOpcode() == Opcodes.GOTO) {
+								LabelNode end = new LabelNode();
+								m.instructions.insert(insn2, end);
+								tryBlocks.add(Pair.of(m.tryCatchBlocks.indexOf(tryCatch) + 1, new TryCatchBlockNode(jmp.label, end, tryCatch.handler, tryCatch.type)));
+								continue nextInsn;
+							}
+						}
+					}
+				}
+				for(Pair<Integer, TryCatchBlockNode> pair : tryBlocks) {
+					m.tryCatchBlocks.add(pair.left, pair.right);
+				}
+			}
+		}
+	}
 	
 	public static void stripSignatures(ClassStorage storage) {
 		for(ClassNode node : storage) {
@@ -897,7 +947,7 @@ public final class Transform {
 					}
 				}
 			}
-			List<FieldReference> fields = new ArrayList<>();
+			List<FieldReference> fields = new ArrayList<FieldReference>();
 			for(FieldNode field : node1.fields) {
 				fields.add(new FieldReference(node1.name, field));
 			}
@@ -922,7 +972,7 @@ public final class Transform {
 					}
 				}
 			}
-			List<MethodReference> methods = new ArrayList<>();
+			List<MethodReference> methods = new ArrayList<MethodReference>();
 			for(MethodNode method : node1.methods) {
 				methods.add(new MethodReference(node1.name, method));
 			}

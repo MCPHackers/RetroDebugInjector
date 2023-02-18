@@ -5,6 +5,7 @@ import static org.objectweb.asm.tree.AbstractInsnNode.*;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -109,9 +110,11 @@ public class InsnHelper {
 
 	public static boolean containsInvoke(InsnList insns, MethodInsnNode invoke) {
 		for(AbstractInsnNode insn : insns) {
-			if(insn.getType() == METHOD_INSN) {
+			if(insn.getOpcode() == invoke.getOpcode()) {
 				MethodInsnNode invoke2 = (MethodInsnNode)insn;
-				if(invoke2.getOpcode() == invoke.getOpcode() && invoke2.owner.equals(invoke.owner) && invoke2.name.equals(invoke.name) && invoke2.desc.equals(invoke.desc)) {
+				if(invoke2.owner.equals(invoke.owner)
+				&& invoke2.name.equals(invoke.name)
+				&& invoke2.desc.equals(invoke.desc)) {
 					return true;
 				}
 			}
@@ -126,7 +129,7 @@ public class InsnHelper {
 	public static void addTryCatch(MethodNode method, AbstractInsnNode startInsn, AbstractInsnNode endInsn, InsnList handle, String exception) {
 		InsnList instructions = method.instructions;
 		if(!instructions.contains(startInsn) || !instructions.contains(endInsn)) {
-			throw new IllegalArgumentException("Instruction does not belong to the list");
+			throw new IllegalArgumentException("Instruction does not belong to the method");
 		}
 		LabelNode start = new LabelNode();
 		LabelNode end = new LabelNode();
