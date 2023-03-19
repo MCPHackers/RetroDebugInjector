@@ -1,4 +1,4 @@
-package org.mcphackers.rdi.util;
+package org.mcphackers.rdi.nio;
 
 import java.io.IOException;
 import java.io.InputStream;

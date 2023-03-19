@@ -61,19 +61,18 @@ public final class Remapper {
 
 	private void createMethodHierarchy() {
 		hierarchisedMethodRenames.clear();
-		Map<String, Set<String>> children = new HashMap<>();
+		Map<String, Set<String>> children = new HashMap<String, Set<String>>();
 		for (ClassNode node : storage) {
-			List<String> parents = new ArrayList<>(node.interfaces.size() + 1);
+			List<String> parents = new ArrayList<String>(node.interfaces.size() + 1);
 			parents.add(node.superName);
 			parents.addAll(node.interfaces);
 			for(String parent : parents) {
-				children.compute(parent, (k, v) -> {
-					if (v == null) {
-						v = new HashSet<>();
-					}
-					v.add(node.name);
-					return v;
-				});
+				Set<String> value = children.get(parent);
+				if(value == null) {
+					value = new HashSet<String>();
+					children.put(parent, value);
+				}
+				value.add(node.name);
 			}
 		}
 		boolean modified;
@@ -145,15 +144,14 @@ public final class Remapper {
 
 	private void createFieldHierarchy() {
 		hierarchisedFieldRenames.clear();
-		Map<String, Set<String>> children = new HashMap<>();
+		Map<String, Set<String>> children = new HashMap<String, Set<String>>();
 		for (ClassNode node : storage) {
-			children.compute(node.superName, (k, v) -> {
-				if (v == null) {
-					v = new HashSet<>();
-				}
-				v.add(node.name);
-				return v;
-			});
+			Set<String> value = children.get(node.superName);
+			if(value == null) {
+				value = new HashSet<String>();
+				children.put(node.superName, value);
+			}
+			value.add(node.name);
 		}
 		boolean modified;
 		do {
@@ -227,7 +225,7 @@ public final class Remapper {
 		createMethodHierarchy();
 		createFieldHierarchy();
 
-		IdentityHashMap<ModuleNode, Boolean> remappedModules = new IdentityHashMap<>();
+		IdentityHashMap<ModuleNode, Boolean> remappedModules = new IdentityHashMap<ModuleNode, Boolean>();
 		for (ClassNode node : storage) {
 			for (FieldNode field : node.fields) {
 				remapField(node.name, field, sharedStringBuilder);
@@ -589,7 +587,7 @@ public final class Remapper {
 		}
 		boolean isStatic = (method.access & Opcodes.ACC_STATIC) != 0;
 		Type[] paramTypes = Type.getArgumentTypes(method.desc);
-		method.parameters = new ArrayList<>();
+		method.parameters = new ArrayList<ParameterNode>();
 		if(lvMappings != null) {
 			for(int i = 0; i < lvMappings.length; i++) {
 				String name = lvMappings[i];

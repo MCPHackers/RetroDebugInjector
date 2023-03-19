@@ -1,0 +1,10 @@
+apply plugin: 'java'
+
+archivesBaseName = 'rdi-io'
+
+sourceCompatibility = JavaVersion.VERSION_1_5
+targetCompatibility = JavaVersion.VERSION_1_5
+
+dependencies {
+	implementation rootProject
+}

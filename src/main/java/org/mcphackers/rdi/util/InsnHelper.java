@@ -5,7 +5,6 @@ import static org.objectweb.asm.tree.AbstractInsnNode.*;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -29,8 +28,19 @@ public class InsnHelper {
 		int i = 0;
 		while(insn != null && i < size) {
 			arr[i] = insn;
-			insn = insn.getNext();
+			insn = nextInsn(insn);
 			i++;
+		}
+		return arr;
+	}
+
+	public static AbstractInsnNode[] fillBackwards(AbstractInsnNode insn, int size) {
+		AbstractInsnNode[] arr = new AbstractInsnNode[size];
+		int i = size - 1;
+		while(insn != null && i >= 0) {
+			arr[i] = insn;
+			insn = previousInsn(insn);
+			i--;
 		}
 		return arr;
 	}

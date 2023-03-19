@@ -7,7 +7,7 @@ import org.mcphackers.rdi.util.FieldReference;
 
 public final class FieldRenameMap {
 
-	private final Map<FieldReference, String> renames = new HashMap<>();
+	private final Map<FieldReference, String> renames = new HashMap<FieldReference, String>();
 
 	public FieldRenameMap() {
 	}
@@ -21,11 +21,19 @@ public final class FieldRenameMap {
 	}
 
 	public String getOrDefault(String owner, String descriptor, String oldName, String defaultValue) {
-		return renames.getOrDefault(new FieldReference(owner, oldName, descriptor), defaultValue);
+		FieldReference ref = new FieldReference(owner, oldName, descriptor);
+		if(!renames.containsKey(ref)) {
+			return defaultValue;
+		}
+		return renames.get(ref);
 	}
 
 	public String optGet(String owner, String descriptor, String oldName) {
-		return renames.getOrDefault(new FieldReference(owner, oldName, descriptor), oldName);
+		FieldReference ref = new FieldReference(owner, oldName, descriptor);
+		if(!renames.containsKey(ref)) {
+			return oldName;
+		}
+		return renames.get(ref);
 	}
 
 	public void put(String owner, String descriptor, String name, String newName) {
@@ -38,7 +46,7 @@ public final class FieldRenameMap {
 	 * @param other the rename map to merge
 	 */
 	public void putAll(FieldRenameMap other) {
-		other.renames.forEach(this.renames::put);
+		this.renames.putAll(other.renames);
 	}
 
 	public int size() {

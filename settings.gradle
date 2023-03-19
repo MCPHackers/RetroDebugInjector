@@ -1,2 +1,5 @@
 rootProject.name = 'RetroDebugInjector'
-
+include 'rdi-io'
+project(':rdi-io').name = rootProject.name + "-IO"
+include 'rdi-nio'
+project(':rdi-nio').name = rootProject.name + "-NIO"

@@ -1,4 +1,4 @@
-package org.mcphackers.rdi.injector;
+package org.mcphackers.rdi.nio;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -6,8 +6,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.mcphackers.rdi.injector.Injector;
 import org.mcphackers.rdi.injector.data.Access;
 import org.mcphackers.rdi.injector.data.ClassStorage;
+import org.mcphackers.rdi.injector.data.Data;
 import org.mcphackers.rdi.injector.data.Exceptions;
 import org.mcphackers.rdi.injector.data.Mappings;
 import org.mcphackers.rdi.injector.remapper.Remapper;
@@ -18,9 +20,6 @@ import org.mcphackers.rdi.injector.visitors.AccessFixer;
 import org.mcphackers.rdi.injector.visitors.AddExceptions;
 import org.mcphackers.rdi.injector.visitors.ClassInitAdder;
 import org.mcphackers.rdi.injector.visitors.ClassVisitor;
-import org.mcphackers.rdi.injector.visitors.FixParameterLVT;
-import org.mcphackers.rdi.util.ClassStorageWriter;
-import org.mcphackers.rdi.util.IOUtil;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
@@ -97,12 +96,12 @@ public class RDInjector implements Injector {
 	}
 	
 	public RDInjector applyMappings(Path path, String srcNamespace, String targetNamespace) {
-		Mappings mappings = Mappings.read(path, srcNamespace, targetNamespace);
+		Mappings mappings = MappingsIO.read(path, srcNamespace, targetNamespace);
 		return applyMappings(mappings);
 	}
 	
 	public RDInjector applyMappings(Path path, int srcNamespace, int targetNamespace) {
-		Mappings mappings = Mappings.read(path, srcNamespace, targetNamespace);
+		Mappings mappings = MappingsIO.read(path, srcNamespace, targetNamespace);
 		return applyMappings(mappings);
 	}
 	
@@ -152,24 +151,19 @@ public class RDInjector implements Injector {
 		return this;
 	}
 	
-	public RDInjector fixParameterLVT() {
-		visitorStack = new FixParameterLVT(visitorStack);
-		return this;
-	}
-	
 	public RDInjector fixImplicitConstructors() {
 		visitorStack = new ClassInitAdder(storage, visitorStack);
 		return this;
 	}
 	
 	public RDInjector fixExceptions(Path path) {
-		Exceptions exceptions = new Exceptions(path);
+		Exceptions exceptions = Data.loadExceptions(path);
 		visitorStack = new AddExceptions(exceptions, visitorStack);
 		return this;
 	}
 	
 	public RDInjector fixAccess(Path path) {
-		Access access = new Access(path);
+		Access access = Data.loadAccess(path);
 		visitorStack = new AccessFixer(access, visitorStack);
 		return this;
 	}

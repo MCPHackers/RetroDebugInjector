@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.mcphackers.rdi.util.FieldReference;
 import org.mcphackers.rdi.util.MethodReference;
@@ -15,15 +14,14 @@ import org.objectweb.asm.tree.MethodNode;
 
 public class ClassStorage implements Iterable<ClassNode> {
 	
-	private final Map<String, ClassNode> cachedNodes = new HashMap<>();
-	private final List<ClassNode> nodes = new ArrayList<>();
+	private final Map<String, ClassNode> cachedNodes = new HashMap<String, ClassNode>();
+	private final List<ClassNode> nodes = new ArrayList<ClassNode>();
 	
 	public ClassStorage(List<ClassNode> classNodes) {
 		nodes.addAll(classNodes);
 		updateCache();
 	}
 
-	@Override
 	public Iterator<ClassNode> iterator() {
 		return nodes.iterator();
 	}
@@ -82,7 +80,11 @@ public class ClassStorage implements Iterable<ClassNode> {
 	}
 	
 	public List<String> getAllClasses() {
-		return nodes.stream().map(node -> node.name).collect(Collectors.toList());
+		List<String> allNames = new ArrayList<String>();
+		for(ClassNode node : nodes) {
+			allNames.add(node.name);
+		}
+		return allNames;
 	}
 	
 	public static boolean inOnePackage(ClassNode node, ClassNode node2) {

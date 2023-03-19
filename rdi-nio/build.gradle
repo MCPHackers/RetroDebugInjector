@@ -1,0 +1,11 @@
+apply plugin: 'java'
+
+archivesBaseName = 'rdi-nio'
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+dependencies {
+	implementation rootProject
+	implementation "net.fabricmc:mapping-io:${project.mapping_io_version}"
+}

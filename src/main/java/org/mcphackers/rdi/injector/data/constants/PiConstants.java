@@ -9,8 +9,8 @@ import org.objectweb.asm.tree.LdcInsnNode;
 import static org.mcphackers.rdi.injector.data.constants.ConstantPool.constant;
 
 public class PiConstants extends Constant {
-	public final List<Constant> piDoubles = new ArrayList<>();
-	public final List<Constant> piFloats = new ArrayList<>();
+	public final List<Constant> piDoubles = new ArrayList<Constant>();
+	public final List<Constant> piFloats = new ArrayList<Constant>();
 	
 	// Math.PI
 	private final ConstantBuilder pi = new ConstantBuilder().set("java/lang/Math", "PI", Math.PI);
@@ -55,7 +55,7 @@ public class PiConstants extends Constant {
 					return true;
 				}
 			}
-			double constD = (double)constant.cst;
+			double constD = (Double)constant.cst;
 			String d = Double.toString(constD);
 			if(d.length() - d.indexOf('.') > 5) {
 				for(ConstantBuilder piConst : new ConstantBuilder[] { pi, piFloatDouble }) {
@@ -80,7 +80,7 @@ public class PiConstants extends Constant {
 					return true;
 				}
 			}
-			float constF = (float)constant.cst;
+			float constF = (Float)constant.cst;
 			String f = Float.toString(constF);
 			if(f.length() - f.indexOf('.') > 5) {
 				float cstFloat = constF / piFloat.floatValue;

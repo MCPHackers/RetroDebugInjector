@@ -7,8 +7,8 @@ import org.mcphackers.rdi.util.MethodReference;
 
 public class MethodRenameMap {
 
-	private final Map<MethodReference, String> renames = new HashMap<>();
-	private final Map<MethodReference, String[]> lvt = new HashMap<>();
+	private final Map<MethodReference, String> renames = new HashMap<MethodReference, String>();
+	private final Map<MethodReference, String[]> lvt = new HashMap<MethodReference, String[]>();
 
 	public MethodRenameMap() {
 	}
@@ -22,11 +22,19 @@ public class MethodRenameMap {
 	}
 
 	public String getOrDefault(String owner, String descriptor, String oldName, String defaultValue) {
-		return renames.getOrDefault(new MethodReference(owner, oldName, descriptor), defaultValue);
+		MethodReference ref = new MethodReference(owner, oldName, descriptor);
+		if(!renames.containsKey(ref)) {
+			return defaultValue;
+		}
+		return renames.get(ref);
 	}
 
 	public String optGet(String owner, String descriptor, String oldName) {
-		return renames.getOrDefault(new MethodReference(owner, oldName, descriptor), oldName);
+		MethodReference ref = new MethodReference(owner, oldName, descriptor);
+		if(!renames.containsKey(ref)) {
+			return oldName;
+		}
+		return renames.get(ref);
 	}
 
 	public void put(String owner, String descriptor, String name, String newName) {
@@ -47,8 +55,8 @@ public class MethodRenameMap {
 	}
 
 	public void putAll(MethodRenameMap other) {
-		other.renames.forEach(this.renames::put);
-		other.lvt.forEach(this.lvt::put);
+		this.renames.putAll(other.renames);
+		this.lvt.putAll(other.lvt);
 	}
 
 	public int size() {

@@ -10,7 +10,7 @@ public class FloatCastedToDouble extends Constant {
 	@Override
 	public boolean replace(InsnList sourceList, LdcInsnNode constant) {
 		if(constant.cst instanceof Double) {
-			double cstDouble = (double)constant.cst;
+			double cstDouble = (Double)constant.cst;
 			float cstFloat = (float)cstDouble;
 			String d = Double.toString(cstDouble);
 			String f = Float.toString(cstFloat);

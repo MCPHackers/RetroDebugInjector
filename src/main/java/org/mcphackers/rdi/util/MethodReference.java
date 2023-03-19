@@ -1,7 +1,6 @@
 package org.mcphackers.rdi.util;
 
 import java.util.Locale;
-import java.util.Objects;
 
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -63,11 +62,11 @@ public class MethodReference {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(owner, name, desc);
+		return (owner.hashCode() & 0xFFFF0000 | name.hashCode() & 0x0000FFFF) ^ desc.hashCode();
 	}
 
 	@Override
 	public String toString() {
-		return String.format(Locale.ROOT, "MethodReference[owner=\"%s\",name=\"%s\",desc=\"%s\"]", this.owner, this.name, this.desc);
+		return String.format(Locale.ENGLISH, "MethodReference[owner=\"%s\",name=\"%s\",desc=\"%s\"]", this.owner, this.name, this.desc);
 	}
 }

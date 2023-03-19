@@ -11,6 +11,7 @@ import java.util.Set;
 
 import org.mcphackers.rdi.injector.data.ClassStorage;
 import org.mcphackers.rdi.injector.remapper.MethodRenameMap;
+import org.mcphackers.rdi.util.Util;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -32,14 +33,15 @@ public class GuessGenerics implements Injection {
 		this.storage = storage;
 	}
 
-	@Override
-	public void transform(ClassStorage classStorage) {
-		storage = classStorage;
+	public void transform(ClassStorage storage) {
+		this.storage = storage;
 		findBridges();
 		verifyIndexes();
-		List<String> interfaces = new ArrayList<>();
-		NodeDelegate delegate = (treeNode) -> {
-			applySignatures(treeNode, interfaces);
+		final List<String> interfaces = new ArrayList<String>();
+		NodeDelegate delegate = new NodeDelegate() {
+			public void call(TreeNode treeNode) {
+				applySignatures(treeNode, interfaces);
+			}
 		};
 		classTree.walk(delegate);
 		renameReferences();
@@ -151,11 +153,11 @@ public class GuessGenerics implements Injection {
 	}
 	
 	private void findBridges() {
-		Map<ClassNode, TreeNode> treeMap = new HashMap<>();
+		Map<ClassNode, TreeNode> treeMap = new HashMap<ClassNode, TreeNode>();
 		for(ClassNode node : storage) {
-			List<Bridge> bridges = new ArrayList<>();
-			Map<ClassNode, Set<String>> allGenerics = new HashMap<>();
-			Map<ClassNode, Set<String>> allGenericsParent = new HashMap<>();
+			List<Bridge> bridges = new ArrayList<Bridge>();
+			Map<ClassNode, Set<String>> allGenerics = new HashMap<ClassNode, Set<String>>();
+			Map<ClassNode, Set<String>> allGenericsParent = new HashMap<ClassNode, Set<String>>();
 			nextMethod:
 			for (MethodNode method : node.methods) {
 				if ((method.access & Opcodes.ACC_SYNTHETIC) == 0) {
@@ -176,8 +178,8 @@ public class GuessGenerics implements Injection {
 				if (aloadThis.var != 0) {
 					continue;
 				}
-				Set<String> generics = new HashSet<>();
-				Set<String> genericsParent = new HashSet<>();
+				Set<String> generics = new HashSet<String>();
+				Set<String> genericsParent = new HashSet<String>();
 				insn = insn.getNext();
 				Type[] types = Type.getArgumentTypes(method.desc);
 				String[] genericTypes = new String[types.length + 1];
@@ -273,7 +275,7 @@ public class GuessGenerics implements Injection {
 				ClassNode parent = storage.getClass(node.superName);
 				Set<String> set = allGenerics.get(parent);
 				if(parent != null && set != null) {
-					List<String> genericsSelf = new ArrayList<>(set);
+					List<String> genericsSelf = new ArrayList<String>(set);
 					treeNode.generics.put(parent.name, genericsSelf);
 					for(Bridge bridge : treeNode.bridges) {
 						if(bridge.parent == parent) {
@@ -283,7 +285,7 @@ public class GuessGenerics implements Injection {
 					TreeNode treeNodeParent = treeMap.get(parent);
 					if(treeNodeParent == null) treeNodeParent = new TreeNode(parent);
 					treeNode.parent = treeNodeParent;
-					List<String> genericsParent = new ArrayList<>(allGenericsParent.get(parent));
+					List<String> genericsParent = new ArrayList<String>(allGenericsParent.get(parent));
 					treeNode.generics.put(parent.superName, genericsParent);
 					treeMap.put(parent, treeNodeParent);
 				}
@@ -294,7 +296,7 @@ public class GuessGenerics implements Injection {
 					if(parent2 == null || set2 == null) {
 						continue;
 					}
-					List<String> genericsSelf = new ArrayList<>(set2);
+					List<String> genericsSelf = new ArrayList<String>(set2);
 					treeNode.generics.put(parent2.name, genericsSelf);
 					for(Bridge bridge : treeNode.bridges) {
 						if(bridge.parent == parent2) {
@@ -304,13 +306,13 @@ public class GuessGenerics implements Injection {
 					TreeNode treeNodeParent = treeMap.get(parent2);
 					if(treeNodeParent == null) treeNodeParent = new TreeNode(parent2);
 					treeNode.interfaces.add(treeNodeParent);
-					List<String> genericsParent = new ArrayList<>(allGenericsParent.get(parent2));
+					List<String> genericsParent = new ArrayList<String>(allGenericsParent.get(parent2));
 					treeNode.generics.put(parent2.superName, genericsParent);
 					treeMap.put(parent2, treeNodeParent);
 				}
 			}
 		}
-		List<TreeNode> treeNodes = new ArrayList<>();
+		List<TreeNode> treeNodes = new ArrayList<TreeNode>();
 		for(Entry<ClassNode, TreeNode> entry : treeMap.entrySet()) {
 			TreeNode treeNode = entry.getValue();
 			treeNodes.add(treeNode);
@@ -325,7 +327,7 @@ public class GuessGenerics implements Injection {
 				} else {
 					TreeNode newNode = new TreeNode(node);
 					newNode.parent = parent;
-					newNode.generics = new HashMap<>();
+					newNode.generics = new HashMap<String, List<String>>();
 					List<String> val = parent.generics.get(parent.classNode.superName);
 					if(val != null) {
 						newNode.generics.put(node.superName, val);
@@ -339,23 +341,25 @@ public class GuessGenerics implements Injection {
 	}
 	
 	public void renameReferences() {
-		NodeDelegate delegate = (treeNode) -> {
-			List<Bridge> bridges = treeNode.bridges;
-			if(bridges == null) {
-				return;
-			}
-			for(Bridge pair : bridges) {
-				if(pair.parentInvokeMethod == null) {
-					String rename = pair.bridgeMethod.name;
+		NodeDelegate delegate = new NodeDelegate() {
+			public void call(TreeNode treeNode) {
+				List<Bridge> bridges = treeNode.bridges;
+				if(bridges == null) {
+					return;
+				}
+				for(Bridge pair : bridges) {
+					if(pair.parentInvokeMethod == null) {
+						String rename = pair.bridgeMethod.name;
+						renameMap.put(treeNode.classNode.name, pair.invokeMethod.desc, pair.invokeMethod.name, rename);
+						pair.invokeMethod.name = rename;
+						continue;
+					}
+					String rename = pair.parentInvokeMethod.name;
+					renameMap.put(treeNode.classNode.name, pair.bridgeMethod.desc, pair.bridgeMethod.name, rename);
+					pair.bridgeMethod.name = rename;
 					renameMap.put(treeNode.classNode.name, pair.invokeMethod.desc, pair.invokeMethod.name, rename);
 					pair.invokeMethod.name = rename;
-					continue;
 				}
-				String rename = pair.parentInvokeMethod.name;
-				renameMap.put(treeNode.classNode.name, pair.bridgeMethod.desc, pair.bridgeMethod.name, rename);
-				pair.bridgeMethod.name = rename;
-				renameMap.put(treeNode.classNode.name, pair.invokeMethod.desc, pair.invokeMethod.name, rename);
-				pair.invokeMethod.name = rename;
 			}
 		};
 		classTree.walk(delegate);
@@ -376,64 +380,66 @@ public class GuessGenerics implements Injection {
 	}
 	
 	private void verifyIndexes() {
-		NodeDelegate delegate1 = (treeNode) -> {
-			if(treeNode.children == null) {
-				return;
-			}
-			Map<MethodNode, int[]> methodIndexes = new HashMap<>();
-			for(TreeNode child : treeNode.children) {
-				if(child.bridges == null) continue;
-				for(Bridge bridge : child.bridges) {
-					if(bridge.parentInvokeMethod == null) {
-						continue;
-					}
-					int[] indexes = methodIndexes.get(bridge.parentInvokeMethod);
-					if(indexes == null) {
-						methodIndexes.put(bridge.parentInvokeMethod, bridge.genericIndexes);
-					} else {
-						for(int i = 0; i < indexes.length; i++) {
-				            if (indexes[i] < bridge.genericIndexes[i]) {
-				            	methodIndexes.put(bridge.parentInvokeMethod, bridge.genericIndexes);
-				            }
+		NodeDelegate delegate1 = new NodeDelegate() {
+			public void call(TreeNode treeNode) {
+				if(treeNode.children == null) {
+					return;
+				}
+				Map<MethodNode, int[]> methodIndexes = new HashMap<MethodNode, int[]>();
+				for(TreeNode child : treeNode.children) {
+					if(child.bridges == null) continue;
+					for(Bridge bridge : child.bridges) {
+						if(bridge.parentInvokeMethod == null) {
+							continue;
+						}
+						int[] indexes = methodIndexes.get(bridge.parentInvokeMethod);
+						if(indexes == null) {
+							methodIndexes.put(bridge.parentInvokeMethod, bridge.genericIndexes);
+						} else {
+							for(int i = 0; i < indexes.length; i++) {
+					            if (indexes[i] < bridge.genericIndexes[i]) {
+					            	methodIndexes.put(bridge.parentInvokeMethod, bridge.genericIndexes);
+					            }
+							}
 						}
 					}
 				}
-			}
-			boolean verifyGenerics = true;
-			for(TreeNode child : treeNode.children) {
-				List<TreeNode> treeNodes = new ArrayList<>();
-				treeNodes.add(treeNode);
-				treeNodes.addAll(child.interfaces);
-				for(TreeNode parent : treeNodes) {
-					if(parent == null || child.bridges == null) continue;
-					String[] childGenerics = new String[1];
-					String[] generics = new String[1];
-					for(Bridge bridge : child.bridges) {
-						if(bridge.parent != parent.classNode) continue;
-						int[] indexes = methodIndexes.get(bridge.parentInvokeMethod);
-						if(indexes == null) continue;
-						bridge.genericIndexes = indexes;
-						for(int i = 0; i < indexes.length; i++) {
-				            if (indexes[i] > 0) {
-				            	childGenerics = childGenerics.length < indexes[i] ? Arrays.copyOf(childGenerics, indexes[i]) : childGenerics;
-				            	childGenerics[indexes[i] - 1] = bridge.generics[i];
-				            	if(verifyGenerics) {
-				            		generics = generics.length < indexes[i] ? Arrays.copyOf(generics, indexes[i]) : generics;
-					            	if(i == indexes.length - 1) {
-						            	Type type = Type.getReturnType(bridge.parentInvokeMethod.desc);
-						            	generics[indexes[i] - 1] = type.getDescriptor();
-					            	} else {
-						            	Type[] types = Type.getArgumentTypes(bridge.parentInvokeMethod.desc);
-						            	generics[indexes[i] - 1] = types[i].getDescriptor();
+				boolean verifyGenerics = true;
+				for(TreeNode child : treeNode.children) {
+					List<TreeNode> treeNodes = new ArrayList<TreeNode>();
+					treeNodes.add(treeNode);
+					treeNodes.addAll(child.interfaces);
+					for(TreeNode parent : treeNodes) {
+						if(parent == null || child.bridges == null) continue;
+						String[] childGenerics = new String[1];
+						String[] generics = new String[1];
+						for(Bridge bridge : child.bridges) {
+							if(bridge.parent != parent.classNode) continue;
+							int[] indexes = methodIndexes.get(bridge.parentInvokeMethod);
+							if(indexes == null) continue;
+							bridge.genericIndexes = indexes;
+							for(int i = 0; i < indexes.length; i++) {
+					            if (indexes[i] > 0) {
+					            	childGenerics = childGenerics.length < indexes[i] ? Util.arrayCopy(childGenerics, indexes[i]) : childGenerics;
+					            	childGenerics[indexes[i] - 1] = bridge.generics[i];
+					            	if(verifyGenerics) {
+					            		generics = generics.length < indexes[i] ? Util.arrayCopy(generics, indexes[i]) : generics;
+						            	if(i == indexes.length - 1) {
+							            	Type type = Type.getReturnType(bridge.parentInvokeMethod.desc);
+							            	generics[indexes[i] - 1] = type.getDescriptor();
+						            	} else {
+							            	Type[] types = Type.getArgumentTypes(bridge.parentInvokeMethod.desc);
+							            	generics[indexes[i] - 1] = types[i].getDescriptor();
+						            	}
 					            	}
-				            	}
-				            }
+					            }
+							}
 						}
-					}
-					child.generics.put(parent.classNode.name, Arrays.asList(childGenerics));
-					if(verifyGenerics) {
-						parent.generics.put(parent.classNode.superName, Arrays.asList(generics));
-						verifyGenerics = false;
+						child.generics.put(parent.classNode.name, Arrays.asList(childGenerics));
+						if(verifyGenerics) {
+							parent.generics.put(parent.classNode.superName, Arrays.asList(generics));
+							verifyGenerics = false;
+						}
 					}
 				}
 			}
@@ -449,11 +455,11 @@ public class GuessGenerics implements Injection {
 		private final ClassNode classNode;
 		
 		TreeNode parent;
-		List<TreeNode> interfaces = new ArrayList<>();
-		List<TreeNode> children = new ArrayList<>();
+		List<TreeNode> interfaces = new ArrayList<TreeNode>();
+		List<TreeNode> children = new ArrayList<TreeNode>();
 		
 		List<Bridge> bridges;
-		Map<String, List<String>> generics = new HashMap<>();
+		Map<String, List<String>> generics = new HashMap<String, List<String>>();
 		
 		public TreeNode(ClassNode node) {
 			classNode = node;
@@ -470,7 +476,7 @@ public class GuessGenerics implements Injection {
 	
 	public class ClassTree {
 		
-		List<TreeNode> root = new ArrayList<>();
+		List<TreeNode> root = new ArrayList<TreeNode>();
 				
 		public ClassTree(List<TreeNode> treeNodes) {
 			for(TreeNode node : treeNodes) {

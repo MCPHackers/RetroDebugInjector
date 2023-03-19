@@ -12,7 +12,7 @@ public class OneDivideByPowerOfTwo extends Constant {
 	public boolean replace(InsnList sourceList, LdcInsnNode constant) {
 		if(constant.cst instanceof Double) {
 			double divisor = 1D;
-			double cst = (double)constant.cst;
+			double cst = (Double)constant.cst;
 			if(cst > 1D / 16D) {
 				return false;
 			}
@@ -20,7 +20,7 @@ public class OneDivideByPowerOfTwo extends Constant {
 			if(!d.endsWith("5")) {
 				return false;
 			}
-			while(cst < 1 && Double.isFinite(cst)) {
+			while(cst < 1 && !Double.isInfinite(cst)) {
 				divisor *= 2D;
 				cst *= 2D;
 			}
@@ -37,7 +37,7 @@ public class OneDivideByPowerOfTwo extends Constant {
 		}
 		else if(constant.cst instanceof Float) {
 			float divisor = 1F;
-			float cst = (float)constant.cst;
+			float cst = (Float)constant.cst;
 			if(cst > 1F / 16F) {
 				return false;
 			}
@@ -45,7 +45,7 @@ public class OneDivideByPowerOfTwo extends Constant {
 			if(!f.endsWith("5")) {
 				return false;
 			}
-			while(cst < 1 && Float.isFinite(cst)) {
+			while(cst < 1 && Float.isInfinite(cst)) {
 				divisor *= 2F;
 				cst *= 2F;
 			}

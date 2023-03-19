@@ -9,8 +9,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.mcphackers.rdi.injector.RDInjector;
 import org.mcphackers.rdi.injector.transform.Transform;
+import org.mcphackers.rdi.nio.RDInjector;
 import org.objectweb.asm.ClassWriter;
 
 public class Main {
@@ -102,8 +102,7 @@ public class Main {
 			if(params.contains("restoresource")) {
 				injector.restoreSourceFile();
 			}
-			injector.addTransform(storage -> Transform.decomposeVars(storage));
-			injector.addTransform(storage -> Transform.fixTryCatchRange(storage));
+			injector.addTransform(Transform::decomposeVars);
 			injector.transform();
 
 			// Export classes

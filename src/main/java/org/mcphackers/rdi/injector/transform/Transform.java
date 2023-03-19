@@ -1,16 +1,7 @@
 package org.mcphackers.rdi.injector.transform;
 
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import org.mcphackers.rdi.injector.data.Access.Level;
 import org.mcphackers.rdi.injector.data.ClassStorage;
@@ -18,30 +9,31 @@ import org.mcphackers.rdi.injector.data.constants.Constant;
 import org.mcphackers.rdi.injector.data.constants.ConstantPool;
 import org.mcphackers.rdi.util.DescString;
 import org.mcphackers.rdi.util.FieldReference;
-import org.mcphackers.rdi.util.InsnHelper;
 import org.mcphackers.rdi.util.MethodReference;
 import org.mcphackers.rdi.util.OPHelper;
 import org.mcphackers.rdi.util.Pair;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
-import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.FrameNode;
-import org.objectweb.asm.tree.InnerClassNode;
-import org.objectweb.asm.tree.JumpInsnNode;
-import org.objectweb.asm.tree.LabelNode;
-import org.objectweb.asm.tree.LdcInsnNode;
-import org.objectweb.asm.tree.MethodInsnNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.TryCatchBlockNode;
-import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.tree.*;
 
 /**
  * Class with global transformations to the list of classes
  */
-public final class Transform {
+public enum Transform implements Injection {
+	
+	DECOMPOSE_VARS {
+		public void transform(ClassStorage storage) {
+			Transform.decomposeVars(storage);
+		}
+	},
+	
+	FIX_ACCESS {
+		public void transform(ClassStorage storage) {
+			Transform.fixAccess(storage);
+		}
+	};
+	
+	public abstract void transform(ClassStorage storage);
 
 	public static final int VISIBILITY_MODIFIERS = Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED | Opcodes.ACC_PUBLIC;
 	
@@ -49,13 +41,13 @@ public final class Transform {
 	 * Guesses the inner classes from class nodes
 	 */
 	public static void fixInnerClasses(ClassStorage storage) {
-		Map<String, InnerClassNode> splitInner = new HashMap<>();
-		Set<String> enums = new HashSet<>();
-		Map<String, List<InnerClassNode>> parents = new HashMap<>();
+		Map<String, InnerClassNode> splitInner = new HashMap<String, InnerClassNode>();
+		Set<String> enums = new HashSet<String>();
+		Map<String, List<InnerClassNode>> parents = new HashMap<String, List<InnerClassNode>>();
 
 		// Initial indexing sweep
 		for (ClassNode node : storage) {
-			parents.put(node.name, new ArrayList<>());
+			parents.put(node.name, new ArrayList<InnerClassNode>());
 			if (node.superName.equals("java/lang/Enum")) {
 				enums.add(node.name); // Register enum
 			}
@@ -182,7 +174,7 @@ public final class Transform {
 		}
 		for (ClassNode node : storage) {
 			// General sweep
-			Collection<InnerClassNode> innerNodesToAdd = new ArrayList<>();
+			Collection<InnerClassNode> innerNodesToAdd = new ArrayList<InnerClassNode>();
 			for (FieldNode field : node.fields) {
 				String descriptor = field.desc;
 				if (descriptor.length() < 4) {
@@ -205,7 +197,7 @@ public final class Transform {
 				}
 			}
 			// Apply inner nodes
-			HashSet<String> entryNames = new HashSet<>();
+			HashSet<String> entryNames = new HashSet<String>();
 			for (InnerClassNode inner : innerNodesToAdd) {
 				if (entryNames.add(inner.name)) {
 					node.innerClasses.add(inner);
@@ -215,14 +207,16 @@ public final class Transform {
 		// Add inner classes to the parent of the anonymous classes
 		for (Map.Entry<String, List<InnerClassNode>> entry : parents.entrySet()) {
 			// Remove duplicates
-			HashSet<String> entryNames = new HashSet<>();
-			ArrayList<InnerClassNode> toRemove = new ArrayList<>();
+			HashSet<String> entryNames = new HashSet<String>();
+			ArrayList<InnerClassNode> toRemove = new ArrayList<InnerClassNode>();
 			for (InnerClassNode inner : entry.getValue()) {
 				if (!entryNames.add(inner.name)) {
 					toRemove.add(inner);
 				}
 			}
-			toRemove.forEach(entry.getValue()::remove);
+			for(InnerClassNode inner : toRemove) {
+				entry.getValue().remove(inner);
+			}
 			ClassNode node = storage.getClass(entry.getKey());
 			for (InnerClassNode innerEntry : entry.getValue()) {
 				boolean skip = false;
@@ -375,7 +369,7 @@ public final class Transform {
 		// I am well aware that we are using method node, but given that there can be multiple methods with the same
 		// name it is better to use MethodNode instead of String to reduce object allocation overhead.
 		// Should we use triple instead? Perhaps.
-		HashMap<String, Map.Entry<String, MethodNode>> candidates = new LinkedHashMap<String, Map.Entry<String, MethodNode>>();
+		HashMap<String, Pair<String, MethodNode>> candidates = new LinkedHashMap<String, Pair<String, MethodNode>>();
 		for (ClassNode node : storage) {
 			if ((node.access & VISIBILITY_MODIFIERS) != 0) {
 				continue; // Anonymous inner classes are always package-private
@@ -452,12 +446,12 @@ public final class Transform {
 								// this is no really valid anonymous class
 								candidates.remove(owner);
 							} else {
-								Map.Entry<String, MethodNode> invoker = candidates.get(owner);
+								Pair<String, MethodNode> invoker = candidates.get(owner);
 								if (invoker == null) {
-									candidates.put(owner, new AbstractMap.SimpleEntry<String, MethodNode>(node.name, method));
-								} else if (!invoker.getKey().equals(node.name)
-										|| !invoker.getValue().name.equals(method.name)
-										|| !invoker.getValue().desc.equals(method.desc)) {
+									candidates.put(owner, Pair.of(node.name, method));
+								} else if (!invoker.getLeft().equals(node.name)
+										|| !invoker.getRight().name.equals(method.name)
+										|| !invoker.getRight().desc.equals(method.desc)) {
 									// constructor referenced by multiple classes, cannot be valid
 									// However apparently these classes could be extended? I am not entirely sure how that is possible, but it is.
 									// That being said, we are going to ignore that this is possible and just consider them invalid
@@ -494,16 +488,16 @@ public final class Transform {
 		}
 
 		int addedInners = 0;
-		for (Map.Entry<String, Map.Entry<String, MethodNode>> candidate : candidates.entrySet()) {
+		for (Map.Entry<String, Pair<String, MethodNode>> candidate : candidates.entrySet()) {
 			String inner = candidate.getKey();
-			Map.Entry<String, MethodNode> outer = candidate.getValue();
+			Pair<String, MethodNode> outer = candidate.getValue();
 			if (outer == null) {
 				continue;
 			}
 			ClassNode innerNode = storage.getClass(inner);
-			ClassNode outernode = storage.getClass(outer.getKey());
+			ClassNode outernode = storage.getClass(outer.getLeft());
 
-			MethodNode outerMethod = outer.getValue();
+			MethodNode outerMethod = outer.getRight();
 			if (outernode == null) {
 				continue;
 			}
@@ -772,39 +766,6 @@ public final class Transform {
 		}
 	}
 	
-//	public static void test(ClassStorage storage) {
-//		for(ClassNode node : storage) {
-//			if(node.name.endsWith("Floor1") || node.name.endsWith("Floor0") || node.name.endsWith("Lookup") || node.name.endsWith("Drft") || node.name.endsWith("Lsp")) {
-//				continue;
-//			}
-//			for(MethodNode method : node.methods) {
-//				AbstractInsnNode insn = method.instructions.getFirst();
-//				while(insn != null) {
-//					if(insn.getOpcode() == Opcodes.LDC) {
-//						LdcInsnNode ldc = (LdcInsnNode)insn;
-//						if(ldc.cst instanceof Double) {
-//							double cstDouble = (Double)ldc.cst;
-//							String d = Double.toString(cstDouble);
-//							if(d.length() - d.indexOf('.') > 5) {
-//								System.out.println(node.name + " " + method.name + method.desc);
-//								System.out.println(d +"D");
-//							}
-//						}
-//						else if(ldc.cst instanceof Float) {
-//							float cstFloat = (Float)ldc.cst;
-//							String f = Float.toString(cstFloat);
-//							if(f.length() - f.indexOf('.') > 5) {
-//								System.out.println(node.name + " " + method.name + method.desc);
-//								System.out.println(f+"F");
-//							}
-//						}
-//					}
-//					insn = insn.getNext();
-//				}
-//			}
-//		}
-//	}
-	
 	public static void replaceCommonConstants(ClassStorage storage) {
 		for(ClassNode node : storage) {
 			for(MethodNode method : node.methods) {
@@ -856,53 +817,6 @@ public final class Transform {
 		for(ClassNode node : storage) {
 			for(MethodNode method : node.methods) {
 				method.localVariables = null;
-			}
-		}
-	}
-
-	public static final void fixTryCatchRange(ClassStorage storage) {
-		for(ClassNode node : storage) {
-			for(MethodNode m : node.methods) {
-				List<LabelNode> tryCatchStarts = new ArrayList<LabelNode>();
-				for(TryCatchBlockNode tryCatch : m.tryCatchBlocks) {
-					tryCatchStarts.add(tryCatch.start);
-				}
-				List<Pair<Integer, TryCatchBlockNode>> tryBlocks = new ArrayList<Pair<Integer, TryCatchBlockNode>>();
-				for(TryCatchBlockNode tryCatch : m.tryCatchBlocks) {
-					nextInsn:
-					for(AbstractInsnNode insn = tryCatch.start; insn != null && insn != tryCatch.end; insn = insn.getNext()) {
-						if(insn.getType() != AbstractInsnNode.JUMP_INSN) {
-							continue;
-						}
-						JumpInsnNode jmp = (JumpInsnNode)insn;
-						if(jmp.label == tryCatch.end) {
-							continue;
-						}
-						if(tryCatchStarts.contains(jmp.label)) {
-							continue;
-						}
-						if(OPHelper.isReturn(InsnHelper.nextInsn(jmp.label).getOpcode())) {
-							continue;
-						}
-						for(AbstractInsnNode insn2 = tryCatch.start; insn2 != tryCatch.end; insn2 = insn2.getNext()) {
-							if(jmp.label == insn2) {
-								continue nextInsn;
-							}
-						}
-						System.out.println("Found a bad try catch in " + node.name + "." + m.name + m.desc + " at index " + m.tryCatchBlocks.indexOf(tryCatch));
-						for(AbstractInsnNode insn2 = jmp.label; insn2 != null; insn2 = insn2.getNext()) {
-							if(OPHelper.isReturn(insn2.getOpcode()) || insn2.getOpcode() == Opcodes.GOTO) {
-								LabelNode end = new LabelNode();
-								m.instructions.insert(insn2, end);
-								tryBlocks.add(Pair.of(m.tryCatchBlocks.indexOf(tryCatch) + 1, new TryCatchBlockNode(jmp.label, end, tryCatch.handler, tryCatch.type)));
-								continue nextInsn;
-							}
-						}
-					}
-				}
-				for(Pair<Integer, TryCatchBlockNode> pair : tryBlocks) {
-					m.tryCatchBlocks.add(pair.left, pair.right);
-				}
 			}
 		}
 	}

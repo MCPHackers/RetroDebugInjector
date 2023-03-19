@@ -5,7 +5,7 @@ import java.util.List;
 
 public class ConstantPool {
 	
-	public static final List<Constant> CONSTANTS = new ArrayList<>();
+	public static final List<Constant> CONSTANTS = new ArrayList<Constant>();
 
 	static {
 		add(constant().set("java/lang/Short", "MAX_VALUE", Short.MAX_VALUE));
@@ -16,13 +16,11 @@ public class ConstantPool {
 		add(constant().set("java/lang/Long", "MIN_VALUE", Long.MIN_VALUE));
 		add(constant().set("java/lang/Float", "MAX_VALUE", Float.MAX_VALUE));
 		add(constant().set("java/lang/Float", "MIN_VALUE", Float.MIN_VALUE));
-		add(constant().set("java/lang/Float", "MIN_NORMAL", Float.MIN_NORMAL));
 		add(constant().set("java/lang/Float", "NaN", Float.NaN));
 		add(constant().set("java/lang/Float", "POSITIVE_INFINITY", Float.POSITIVE_INFINITY));
 		add(constant().set("java/lang/Float", "NEGATIVE_INFINITY", Float.NEGATIVE_INFINITY));
 		add(constant().set("java/lang/Double", "MAX_VALUE", Double.MAX_VALUE));
 		add(constant().set("java/lang/Double", "MIN_VALUE", Double.MIN_VALUE));
-		add(constant().set("java/lang/Double", "MIN_NORMAL", Double.MIN_NORMAL));
 		add(constant().set("java/lang/Double", "NaN", Double.NaN));
 		add(constant().set("java/lang/Double", "POSITIVE_INFINITY", Double.POSITIVE_INFINITY));
 		add(constant().set("java/lang/Double", "NEGATIVE_INFINITY", Double.NEGATIVE_INFINITY));
