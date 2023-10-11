@@ -6,11 +6,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 
+import net.fabricmc.mappingio.MappingReader;
+import net.fabricmc.mappingio.format.MappingFormat;
+import net.fabricmc.mappingio.format.tiny.Tiny1FileReader;
+import net.fabricmc.mappingio.format.tiny.Tiny2FileReader;
 import org.mcphackers.rdi.injector.data.Mappings;
 import org.mcphackers.rdi.injector.data.Mappings.Provider;
 
-import net.fabricmc.mappingio.format.Tiny1Reader;
-import net.fabricmc.mappingio.format.Tiny2Reader;
 import net.fabricmc.mappingio.tree.MappingTree.ClassMapping;
 import net.fabricmc.mappingio.tree.MappingTree.FieldMapping;
 import net.fabricmc.mappingio.tree.MappingTree.MethodArgMapping;
@@ -29,10 +31,10 @@ public class MappingsIO {
 			MemoryMappingTree mappingTree = new MemoryMappingTree();
 			switch (provider) {
 			case TINY1:
-				Tiny1Reader.read(br, mappingTree);
+				MappingReader.read(br, MappingFormat.TINY_FILE, mappingTree);
 				break;
 			case TINY2:
-				Tiny2Reader.read(br, mappingTree);
+				MappingReader.read(br, MappingFormat.TINY_2_FILE, mappingTree);
 				break;
 			}
 			for(ClassMapping classMapping : mappingTree.getClasses()) {
@@ -87,10 +89,10 @@ public class MappingsIO {
 			MemoryMappingTree mappingTree = new MemoryMappingTree();
 			switch (provider) {
 			case TINY1:
-				Tiny1Reader.read(br, mappingTree);
+				MappingReader.read(br, MappingFormat.TINY_FILE, mappingTree);
 				break;
 			case TINY2:
-				Tiny2Reader.read(br, mappingTree);
+				MappingReader.read(br, MappingFormat.TINY_2_FILE, mappingTree);
 				break;
 			}
 			for(ClassMapping classMapping : mappingTree.getClasses()) {

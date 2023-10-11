@@ -21,8 +21,9 @@ allprojects {
 		implementation "org.ow2.asm:asm-util:${project.asm_version}"
 	}
 
-	task sourcesJar(type: Jar, dependsOn: classes) {
-		classifier = 'sources'
+	tasks.register('sourcesJar', Jar) {
+		dependsOn classes
+		archiveClassifier = 'sources'
 		from sourceSets.main.allSource
 	}
 	
