@@ -6,7 +6,6 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 
-import org.mcphackers.rdi.injector.data.Exceptions;
 import org.mcphackers.rdi.injector.data.Access.Level;
 import org.mcphackers.rdi.util.FieldReference;
 import org.mcphackers.rdi.util.MethodReference;

@@ -1,7 +1,6 @@
 package org.mcphackers.rdi.util;
 
-import static org.mcphackers.rdi.util.InsnHelper.range;
-import static org.mcphackers.rdi.util.InsnHelper.remove;
+import static org.mcphackers.rdi.util.InsnHelper.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -87,5 +86,14 @@ public class IdentifyCall {
 			remove(insns, arg);
 		}
 		insns.remove(invoke);
+	}
+
+	public static IdentifyCall identifyCall(InsnList insns, int opcode, String owner, String name, String desc) {
+		for(AbstractInsnNode insn : insns) {
+			if(compareInsn(insn, opcode, owner, name, desc)) {
+				return new IdentifyCall((MethodInsnNode)insn);
+			}
+		}
+		return null;
 	}
 }

@@ -59,6 +59,10 @@ public class ClassStorage implements Iterable<ClassNode> {
 	}
 	
 	public void addClass(ClassNode node) {
+		ClassNode oldNode = cachedNodes.get(node.name);
+		if(oldNode != null) {
+			nodes.remove(oldNode);
+		}
 		nodes.add(node);
 		cachedNodes.put(node.name, node);
 	}

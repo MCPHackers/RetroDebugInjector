@@ -10,15 +10,23 @@ import java.util.List;
 import java.util.Map;
 
 import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.IincInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.LineNumberNode;
+import org.objectweb.asm.tree.LookupSwitchInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.MultiANewArrayInsnNode;
+import org.objectweb.asm.tree.TableSwitchInsnNode;
 import org.objectweb.asm.tree.TryCatchBlockNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class InsnHelper {
@@ -97,6 +105,7 @@ public class InsnHelper {
 		return clone(Arrays.asList(insnList));
 	}
 
+	// Can cause frames to be invalid
 	public static LabelNode labelBefore(AbstractInsnNode current) {
 		current = current.getPrevious();
 		while(current.getType() == LINE) { // Skip line number nodes
@@ -133,10 +142,14 @@ public class InsnHelper {
 	}
 
 	public static void addTryCatch(MethodNode method, AbstractInsnNode startInsn, AbstractInsnNode endInsn, String exception) {
-		addTryCatch(method, startInsn, endInsn, null, exception);
+		addTryCatch(method, startInsn, endInsn, null, exception, null);
 	}
 
 	public static void addTryCatch(MethodNode method, AbstractInsnNode startInsn, AbstractInsnNode endInsn, InsnList handle, String exception) {
+		addTryCatch(method, startInsn, endInsn, handle, exception, null);
+	}
+
+	public static void addTryCatch(MethodNode method, AbstractInsnNode startInsn, AbstractInsnNode endInsn, InsnList handle, String exception, TryCatchBlockNode afterBlock) {
 		InsnList instructions = method.instructions;
 		if(!instructions.contains(startInsn) || !instructions.contains(endInsn)) {
 			throw new IllegalArgumentException("Instruction does not belong to the method");
@@ -157,17 +170,27 @@ public class InsnHelper {
 		}
 		insert.add(after);
 		instructions.insert(endInsn, insert);
-		int index = 0; // FIXME Shouldn't be 0 if there are try/catch blocks within the range
-		method.tryCatchBlocks.add(index, new TryCatchBlockNode(start, end, handler, exception));
+		if(afterBlock == null) {	
+			method.tryCatchBlocks.add(0, new TryCatchBlockNode(start, end, handler, exception));
+		} else {
+			method.tryCatchBlocks.add(method.tryCatchBlocks.indexOf(afterBlock)+1, new TryCatchBlockNode(start, end, handler, exception));
+		}
 	}
 
 	public static int getFreeIndex(InsnList instructions) {
+		return getFreeIndex(instructions, null);
+	}
+
+	public static int getFreeIndex(InsnList instructions, AbstractInsnNode until) {
 		int lastFree = 1;
 		AbstractInsnNode insn = instructions.getFirst();
 		while(insn != null) {
+			if(insn == until) {
+				break;
+			}
 			if(insn.getType() == VAR_INSN) {
 				VarInsnNode var = (VarInsnNode)insn;
-				lastFree = Math.max(lastFree, var.var + 1); //FIXME 2 if it's a double or long?
+				lastFree = Math.max(lastFree, var.var + Math.abs(OPHelper.getStackSizeDelta(insn)));
 			}
 			insn = insn.getNext();
 		}
@@ -244,6 +267,227 @@ public class InsnHelper {
 		else {
 			return new LdcInsnNode(value);
 		}
+	}
+
+	public static int intValue(AbstractInsnNode insn) {
+		switch(insn.getOpcode()) {
+			case ICONST_M1:
+				return -1;
+			case ICONST_0:
+				return 0;
+			case ICONST_1:
+				return 1;
+			case ICONST_2:
+				return 2;
+			case ICONST_3:
+				return 3;
+			case ICONST_4:
+				return 4;
+			case ICONST_5:
+				return 5;
+			case BIPUSH:
+				return ((IntInsnNode)insn).operand;
+			case SIPUSH:
+				return ((IntInsnNode)insn).operand;
+			default:
+				return (Integer)((LdcInsnNode)insn).cst;
+		}
+	}
+	
+	public static long longValue(AbstractInsnNode insn) {
+		switch(insn.getOpcode()) {
+			case LCONST_0:
+				return 0L;
+			case LCONST_1:
+				return 1L;
+			default:
+				return (Long)((LdcInsnNode)insn).cst;
+		}
+	}
+
+	public static boolean booleanValue(AbstractInsnNode insn) {
+		return (insn.getOpcode() == ICONST_1 ? true : false);
+	}
+
+	public static float floatValue(AbstractInsnNode insn) {
+		switch(insn.getOpcode()) {
+			case FCONST_0:
+				return 0F;
+			case FCONST_1:
+				return 1F;
+			case FCONST_2:
+				return 2F;
+			default:
+				return (Float)((LdcInsnNode)insn).cst;
+		}
+	}
+
+	public static double doubleValue(AbstractInsnNode insn) {
+		switch(insn.getOpcode()) {
+			case DCONST_0:
+				return 0F;
+			case DCONST_1:
+				return 1F;
+			default:
+				return (Double)((LdcInsnNode)insn).cst;
+		}
+	}
+
+	public static AbstractInsnNode getSuper(AbstractInsnNode first) {
+		AbstractInsnNode insn = first;
+		while(insn != null) {
+			AbstractInsnNode prev = insn.getPrevious();
+			if(prev != null && prev.getOpcode() == ALOAD && ((VarInsnNode) prev).var == 0 && insn.getOpcode() == INVOKESPECIAL && ((MethodInsnNode) insn).name.equals("<init>")) {
+				break;
+			}
+			insn = insn.getNext();
+		}
+		return insn;
+	}
+
+	public static AbstractInsnNode getLastReturn(AbstractInsnNode last) {
+		AbstractInsnNode insn = last;
+		while(insn != null) {
+			if(OPHelper.isReturn(insn.getOpcode())) {
+				break;
+			}
+			insn = insn.getPrevious();
+		}
+		return insn;
+	}
+
+	@SuppressWarnings("unused")
+	public static boolean compareInsn(AbstractInsnNode insn, int opcode, Object... compare) {
+		if(insn == null) {
+			return false;
+		}
+		boolean opcodeEqual = opcode == insn.getOpcode() || opcode == -1;
+		if(!opcodeEqual)
+			return false;
+		if(compare.length == 0 && opcodeEqual) {
+			return true;
+		}
+		boolean matches = true;
+		switch(insn.getType()) {
+			case INSN:
+				InsnNode insn1 = (InsnNode) insn;
+				// Nothing to compare
+				return matches;
+			case INT_INSN:
+				IntInsnNode insn2 = (IntInsnNode) insn;
+				if(compare.length > 0) {
+					matches &= insn2.operand == (Integer) compare[0];
+				}
+				return matches;
+			case VAR_INSN:
+				VarInsnNode insn3 = (VarInsnNode) insn;
+				if(compare.length > 0) {
+					matches &= insn3.var == (Integer) compare[0];
+				}
+				return matches;
+			case TYPE_INSN:
+				TypeInsnNode insn4 = (TypeInsnNode) insn;
+				if(compare.length > 0) {
+					matches &= insn4.desc.equals(compare[0]);
+				}
+				return matches;
+			case FIELD_INSN:
+				FieldInsnNode insn5 = (FieldInsnNode) insn;
+				if(compare.length > 0) {
+					matches &= compare[0] == null || insn5.owner.equals(compare[0]);
+				}
+				if(compare.length > 1) {
+					matches &= compare[1] == null || insn5.name.equals(compare[1]);
+				}
+				if(compare.length > 2) {
+					matches &= compare[2] == null || insn5.desc.equals(compare[2]);
+				}
+				return matches;
+			case METHOD_INSN:
+				MethodInsnNode insn6 = (MethodInsnNode) insn;
+				if(compare.length > 0) {
+					matches &= compare[0] == null || insn6.owner.equals(compare[0]);
+				}
+				if(compare.length > 1) {
+					matches &= compare[1] == null || insn6.name.equals(compare[1]);
+				}
+				if(compare.length > 2) {
+					matches &= compare[2] == null || insn6.desc.equals(compare[2]);
+				}
+				return matches;
+			case INVOKE_DYNAMIC_INSN:
+				InvokeDynamicInsnNode insn7 = (InvokeDynamicInsnNode) insn;
+				if(compare.length > 0) {
+					matches &= compare[0] == null || insn7.bsm.equals(compare[0]); // TODO ?
+				}
+				if(compare.length > 1) {
+					matches &= compare[1] == null || insn7.name.equals(compare[1]);
+				}
+				if(compare.length > 2) {
+					matches &= compare[2] == null || insn7.desc.equals(compare[2]);
+				}
+				return matches;
+			case JUMP_INSN:
+				JumpInsnNode insn8 = (JumpInsnNode) insn;
+				if(compare.length > 0) {
+					LabelNode label = (LabelNode) compare[0];
+					matches &= label == insn8.label;
+				}
+				return matches;
+			case LABEL:
+				LabelNode insn9 = (LabelNode) insn;
+				if(compare.length > 0) {
+					LabelNode label = (LabelNode) compare[0];
+					matches &= label == insn9;
+				}
+				return matches;
+			case LDC_INSN:
+				LdcInsnNode insn10 = (LdcInsnNode) insn;
+				if(compare.length > 0) {
+					Object o = compare[0];
+					matches &= o == null && insn10.cst == null || o != null && o.equals(insn10.cst);
+				}
+				return matches;
+			case IINC_INSN:
+				IincInsnNode insn11 = (IincInsnNode) insn;
+				if(compare.length > 0) {
+					Integer i = (Integer) compare[0];
+					matches &= i == null || insn11.var == i;
+				}
+				if(compare.length > 1) {
+					Integer i = (Integer) compare[1];
+					matches &= i == null || insn11.incr == i;
+				}
+				return matches;
+			case TABLESWITCH_INSN:
+				TableSwitchInsnNode insn12 = (TableSwitchInsnNode) insn;
+				// TODO
+				return matches;
+			case LOOKUPSWITCH_INSN:
+				LookupSwitchInsnNode insn13 = (LookupSwitchInsnNode) insn;
+				// TODO
+				return matches;
+			case MULTIANEWARRAY_INSN:
+				MultiANewArrayInsnNode insn14 = (MultiANewArrayInsnNode) insn;
+				if(compare.length > 0) {
+					matches &= compare[0] == null || insn14.desc.equals(compare[0]);
+				}
+				if(compare.length > 1) {
+					Integer i = (Integer) compare[0];
+					matches &= i == null || insn14.dims == i;
+				}
+				return matches;
+			case FRAME:
+				return matches;
+			case LINE:
+				LineNumberNode insn16 = (LineNumberNode) insn;
+				if(compare.length > 0) {
+					matches &= insn16.line == (Integer) compare[0];
+				}
+				return matches;
+
+		}
+		return false;
 	}
 
 }
