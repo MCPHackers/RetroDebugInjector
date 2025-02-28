@@ -731,6 +731,9 @@ public final class Remapper {
 			// find the end of the internal name of the object
 			int endObject = start;
 			while(true) {
+				if(endObject + 1 == end) {
+					return false;
+				}
 				// this will skip a character, but this is not interesting as class names have to be at least 1 character long
 				int codepoint = signature.codePointAt(++endObject);
 				if (codepoint == ';') {

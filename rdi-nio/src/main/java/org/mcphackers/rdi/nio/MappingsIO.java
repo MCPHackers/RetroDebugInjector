@@ -8,8 +8,6 @@ import java.util.Collection;
 
 import net.fabricmc.mappingio.MappingReader;
 import net.fabricmc.mappingio.format.MappingFormat;
-import net.fabricmc.mappingio.format.tiny.Tiny1FileReader;
-import net.fabricmc.mappingio.format.tiny.Tiny2FileReader;
 import org.mcphackers.rdi.injector.data.Mappings;
 import org.mcphackers.rdi.injector.data.Mappings.Provider;
 
