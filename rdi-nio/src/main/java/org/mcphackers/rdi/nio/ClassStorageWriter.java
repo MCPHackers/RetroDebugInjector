@@ -7,8 +7,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -30,13 +32,19 @@ public class ClassStorageWriter {
 	}
 	
 	public void write(OutputStream out) throws IOException {
+		Set<String> writtenClasses = new HashSet<>();
 		ZipOutputStream jarOut = new ZipOutputStream(out);
 		for (ClassNode classNode : storage) {
+			if(writtenClasses.contains(classNode.name)) {
+				// Should not happen, but some bad jars do that
+				continue;
+			}
 			ClassWriter writer = new ClassWriter(flags);
 			classNode.accept(writer);
 			jarOut.putNextEntry(new ZipEntry(classNode.name + ".class"));
 			jarOut.write(writer.toByteArray());
 			jarOut.closeEntry();
+			writtenClasses.add(classNode.name);
 		}
 		jarOut.close();
 	}
@@ -51,12 +59,18 @@ public class ClassStorageWriter {
 	 */
 	public void write(OutputStream out, List<Path> resources) throws IOException {
 		try(ZipOutputStream jarOut = new ZipOutputStream(out)) {
+			Set<String> writtenClasses = new HashSet<>();
 			for (ClassNode classNode : storage) {
+				if(writtenClasses.contains(classNode.name)) {
+					// Should not happen, but some bad jars do that
+					continue;
+				}
 				ClassWriter writer = new ClassWriter(flags);
 				classNode.accept(writer);
 				jarOut.putNextEntry(new ZipEntry(classNode.name + ".class"));
 				jarOut.write(writer.toByteArray());
 				jarOut.closeEntry();
+				writtenClasses.add(classNode.name);
 			}
 			List<String> addedResources = new ArrayList<>();
 			for(Path path : resources)
